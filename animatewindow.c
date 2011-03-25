@@ -1,33 +1,28 @@
 #include <stdio.h>
 
-#define _WIN32_WINNT 0x0500
-#include <windows.h>
+#include <gtk/gtk.h>
+
+void destroy_window( GtkWidget *widget, gpointer data)
+{
+    gtk_main_quit();
+}
 
 int main(int argc, char* argv[])
 {
-    DWORD dwExStyle = WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TOPMOST;
-    DWORD dwStyle = WS_POPUP | WS_VISIBLE;
-    LPVOID lpParam = NULL;
-    int x = 0;
-    int y = 0;
-    int nWidth = 100;
-    int nHeight = 100;
-    HWND hWndParent = NULL;
-    HMENU hMenu = 0;
-    HINSTANCE hInstance = NULL;
-    HWND hWnd = CreateWindowEx(dwExStyle,
-                   "ghostbiff",
-                   "BIFF",
-                   dwStyle,
-                   x,
-                   y,
-                   nWidth,
-                   nHeight,
-                   hWndParent,
-                   hMenu,
-                   hInstance,
-                   lpParam);
-    ShowWindow(hWnd, SW_SHOWNORMAL);
-    Sleep(10000);
-                   
+    GtkWidget *window;
+    gint my_timer;
+    guint count = 1;
+    gtk_init( &argc, &argv);
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
+    gtk_window_set_title(GTK_WINDOW(window), "step3");
+    gtk_window_set_opacity(GTK_WINDOW(window), 0.5);
+    gtk_signal_connect( GTK_OBJECT(window),"destroy",
+                        GTK_SIGNAL_FUNC(destroy_window), NULL);
+    gtk_widget_show(window);
+    /*my_timer = gtk_timeout_add(2000,(GtkFunction)timer_event,NULL);*/
+    gtk_main();
+    /*gtk_timeout_remove(my_timer);*/
+ 	
+    return 0;                   
 }

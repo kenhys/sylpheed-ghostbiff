@@ -32,6 +32,9 @@ if [ ! -z "$1" ]; then
       mo)
           com="msgfmt po/ja.po -o po/ghostbiff.mo"
           ;;
+      sstp)
+          com="gcc -o directsstp.exe directsstp.c $INC $LIBS"
+          ;;
   esac
   echo $com
   eval $com
