@@ -73,6 +73,16 @@ int main(int argc, char* argv[])
                     nIndex++;
                 }
 
+                COPYDATASTRUCT cds;
+                CHAR lpszData[] = "SEND SSTP/1.4\r\nSender: カードキャプター\r\nScript: \\h\\s0あーあーあー。\\e\r\nHWnd: 2097556Charset: Shift_JISThis is DATA.\r\n";
+
+                cds.dwData = 1;
+                cds.cbData = sizeof(lpszData);
+                cds.lpData = (LPVOID)lpszData;
+                WPARAM wParam = (WPARAM)2097556;
+                LPARAM lParam = (LPARAM)&cds;
+
+                SendMessage((HANDLE)2097556, WM_COPYDATA, wParam, lParam);
                 UnmapViewOfFile(lpMap);
             }
         }
