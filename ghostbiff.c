@@ -1,6 +1,6 @@
 /*
- * Auto mail forward Plug-in
- *  -- forward received mail to address described in autoforwardrc.
+ * Ghostbiff Plug-in
+ *  -- simple biff program via DirectSSTP.
  * Copyright (C) 2011 HAYASHI Kentaro <kenhys@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -33,8 +33,8 @@
 #include "utils.h"
 #include "alertpanel.h"
 #include "prefs_common.h"
-#include "online.xpm"
-#include "offline.xpm"
+#include "bell_add.xpm"
+#include "bell_delete.xpm"
 
 
 #include <glib.h>
@@ -83,13 +83,11 @@ void plugin_load(void)
     GtkWidget *statusbar = syl_plugin_main_window_get_statusbar();
     GtkWidget *plugin_box = gtk_hbox_new(FALSE, 0);
 
-    GdkPixbuf* on_pixbuf = gdk_pixbuf_new_from_xpm_data((const char**)online_xpm);
+    GdkPixbuf* on_pixbuf = gdk_pixbuf_new_from_xpm_data((const char**)bell_add);
     g_plugin_on=gtk_image_new_from_pixbuf(on_pixbuf);
-    /*g_plugin_on = gtk_label_new(_("AF ON"));*/
     
-    GdkPixbuf* off_pixbuf = gdk_pixbuf_new_from_xpm_data((const char**)offline_xpm);
+    GdkPixbuf* off_pixbuf = gdk_pixbuf_new_from_xpm_data((const char**)bell_delete);
     g_plugin_off=gtk_image_new_from_pixbuf(off_pixbuf);
-    /*g_plugin_off = gtk_label_new(_("AF OFF"));*/
 
     gtk_box_pack_start(GTK_BOX(plugin_box), g_plugin_on, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(plugin_box), g_plugin_off, FALSE, FALSE, 0);
@@ -114,10 +112,10 @@ void plugin_load(void)
 	gchar *rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
     g_keyfile = g_key_file_new();
     if (g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
-        gchar *startup=g_key_file_get_string (g_keyfile, "forward", "startup", NULL);
-        debug_print("startup:%s", startup);
+        gboolean startup=g_key_file_get_boolean (g_keyfile, "ghostbiff", "startup", NULL);
+        debug_print("startup:%s", startup ? "true" : "false");
         g_free(rcpath);
-        if (strcmp("true", startup)==0){
+        if (startup){
             g_enable=TRUE;
             gtk_widget_hide(g_plugin_off);
             gtk_widget_show(g_plugin_on);
@@ -152,12 +150,8 @@ static void prefs_ok_cb(GtkWidget *widget, gpointer data)
     g_keyfile = g_key_file_new();
     g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL);
 
-    gchar *address = gtk_entry_get_text(GTK_ENTRY(g_address));
-    if (address!=NULL){
-        g_key_file_set_string (g_keyfile, "forward", "to", address);
-    }
     gboolean startup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_startup));
-    g_key_file_set_boolean (g_keyfile, "forward", "startup", startup);
+    g_key_file_set_boolean (g_keyfile, "ghostbiff", "startup", startup);
     debug_print("startup:%d\n", startup);
 
     /**/
@@ -222,20 +216,7 @@ static void exec_ghostbiff_menu_cb(void)
 	g_signal_connect(G_OBJECT(cancel_btn), "clicked",
                      G_CALLBACK(prefs_cancel_cb), window);
 
-	/* email settings */
-    GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
-	gtk_widget_show(hbox);
-	gtk_container_add(GTK_CONTAINER(vbox), hbox);
-
-    GtkWidget *label = gtk_label_new(_("Forward to(E-mail):"));
-	gtk_widget_show(label);
-	gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
-
-    g_address = gtk_entry_new();
-    gtk_widget_show(g_address);
-	gtk_box_pack_start(GTK_BOX(hbox), g_address, TRUE, TRUE, 0);
-
-	/* email settings */
+	/* startup settings */
 	g_startup = gtk_check_button_new_with_label(_("Enable plugin on startup."));
 	gtk_widget_show(g_startup);
 	gtk_box_pack_start(GTK_BOX(vbox), g_startup, FALSE, FALSE, 0);
@@ -244,12 +225,12 @@ static void exec_ghostbiff_menu_cb(void)
     gchar *rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
     g_keyfile = g_key_file_new();
     if (g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
-        gchar *startup=g_key_file_get_string (g_keyfile, "forward", "startup", NULL);
+        gchar *startup=g_key_file_get_string (g_keyfile, "ghostbiff", "startup", NULL);
         debug_print("startup:%s", startup);
         if (strcmp(startup, "true")==0){
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_startup), TRUE);
         }
-        gchar *to=g_key_file_get_string (g_keyfile, "forward", "to", NULL);
+        gchar *to=g_key_file_get_string (g_keyfile, "ghostbiff", "to", NULL);
         gtk_entry_set_text(GTK_ENTRY(g_address), to);
     }
     g_free(rcpath);
@@ -298,40 +279,95 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
     
     PrefsAccount *ac = (PrefsAccount*)account_get_default();
     g_return_if_fail(ac != NULL);
-    
-    syl_plugin_send_message_set_forward_flags(ac->address);
 
-	FILE *fp;
-    gchar *rcpath;
-    GSList* to_list=NULL;
 
-    gchar buf[PREFSBUFSIZE];
-	rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
+     HANDLE hMutex = CreateMutex(NULL,FALSE,"SakuraFMO");
+    if ( hMutex == NULL ) {
+        g_print("No SakuraFMO\n");
+        return 0;
+    }
+    if ( WaitForSingleObject(hMutex, 1000) != WAIT_TIMEOUT ) {
+        g_print("SakuraFMO\n");
 
-#if 0
-	if ((fp = g_fopen(rcpath, "rb")) == NULL) {
-		if (ENOENT != errno) FILE_OP_ERROR(rcpath, "fopen");
-		g_free(rcpath);
-		return;
-	}
-	g_free(rcpath);
+        DWORD dwDesiredAccess = FILE_MAP_READ;
+        BOOL bInheritHandle = TRUE;
+        LPCTSTR lpName;
+        HANDLE hFMO = OpenFileMapping(dwDesiredAccess,
+                                      bInheritHandle,
+                                      "Sakura");
+        HANDLE hwnd;
+        if (hFMO != NULL){
+            DWORD dwFileOffsetHigh = 0;
+            DWORD dwFileOffsetLow = 0;
+            /* map all */
+            DWORD dwNumberOfBytesToMap = 0;
+            LPVOID lpBaseAddress = NULL;
+            LPVOID lpMap = MapViewOfFileEx(hFMO,
+                                           dwDesiredAccess,
+                                           dwFileOffsetHigh,
+                                           dwFileOffsetLow,
+                                           dwNumberOfBytesToMap,
+                                           lpBaseAddress);
+            if (lpMap != NULL) {
+                unsigned char *p = (unsigned char*)lpMap;
+                DWORD *lp = (DWORD*)lpMap;
+                int nIndex = 0;
+                g_print("%p 0x%04x %ld\n", lp, lp[0], lp[0]);
+                nIndex = 4;
+                unsigned char kbuf[1024];
+                unsigned char vbuf[1024];
+                int nkbuf=-1;
+                int nvbuf=-1;
+                int flg = 0;
+                while (nIndex < 1000){
+                    if (p[nIndex] == 0x0d && p[nIndex+1] == 0x0a){
+                        g_print("\nkey:%s\n", kbuf);
+                        vbuf[nvbuf]='\0';
+                        g_print("value:%s\n", vbuf);
+                        nIndex++;
+                        nkbuf=0;
+                        nvbuf=0;
+                        flg = 0;
+                        if (strstr(kbuf, ".hwnd")!=NULL){
+                            hwnd = (HANDLE)atoi(vbuf);
+                            g_print("hwnd:%d\n", hwnd);
+                        }
+                    } else if (p[nIndex] == 0x01){
+                        g_print(" => ");
+                        kbuf[nkbuf] = '\0';
+                        nvbuf=0;
+                        flg = 1;
+                    }else if (isascii(p[nIndex])==TRUE){
+                        g_print("%c",p[nIndex]);
+                        if (flg){
+                            vbuf[nvbuf++] = p[nIndex];
+                        } else {
+                            kbuf[nkbuf++] = p[nIndex];
+                        }
+                    }else {
+                        g_print(" 0x%02x", p[nIndex]);
+                    }
+                    nIndex++;
+                }
 
-    while (fgets(buf, sizeof(buf), fp) != NULL) {
-		g_strstrip(buf);
-		if (buf[0] == '\0') continue;
-        to_list = address_list_append(to_list, buf);
-	}
-	fclose(fp);
-#else
+                COPYDATASTRUCT cds;
+                CHAR lpszData[1024];
 
-    g_keyfile = g_key_file_new();
-    g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL);
-    gchar *to=g_key_file_get_string (g_keyfile, "forward", "to", NULL);
-    debug_print("to:%s", to);
-    to_list = address_list_append(to_list, to);
-	g_free(rcpath);
-#endif
-    g_return_if_fail(to_list != NULL);
+                wsprintf(lpszData, "SEND SSTP/1.4\r\nSender: ghostbiff\r\nScript: \\h\\s0 HWND:%d\\e\r\nHWnd: %dCharset: Shift_JISThis is DATA.\r\n", hwnd, hwnd);
+                
+                cds.dwData = 1;
+                cds.cbData = sizeof(lpszData);
+                cds.lpData = (LPVOID)lpszData;
+                WPARAM wParam = (WPARAM)hwnd;/*hwnd;*/
+                LPARAM lParam = (LPARAM)&cds;
 
-    syl_plugin_send_message(file, ac, to_list);
+                SendMessage((HANDLE)hwnd, WM_COPYDATA, wParam, lParam);
+                UnmapViewOfFile(lpMap);
+            }
+        }
+        ReleaseMutex(hMutex);
+    }
+
+    CloseHandle(hMutex);
+
 }

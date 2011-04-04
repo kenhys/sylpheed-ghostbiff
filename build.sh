@@ -1,6 +1,7 @@
 
 TARGET=ghostbiff.dll
 OBJS=ghostbiff.o
+PKG=sylpheed-ghostbiff
 LIBSYLPH=./lib/libsylph-0-1.a
 LIBSYLPHEED=./lib/libsylpheed-plugin-0-1.a
 #LIBS=" -lglib-2.0-0  -lintl"
@@ -34,6 +35,13 @@ if [ ! -z "$1" ]; then
           ;;
       sstp)
           com="gcc -o directsstp.exe directsstp.c $INC $LIBS"
+          ;;
+      release)
+          zip $PKG-$2.zip ghostbiff.dll
+          zip -r $PKG-$2.zip README.ja.txt
+          #zip -r $PKG-$2.zip ghostbiff.c
+          zip -r $PKG-$2.zip po/ghostbiff.mo
+          zip -r $PKG-$2.zip *.xpm
           ;;
   esac
   echo $com
