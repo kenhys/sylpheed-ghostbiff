@@ -40,7 +40,7 @@ if [ ! -z "$1" ]; then
           zip $PKG-$2.zip ghostbiff.dll
           zip -r $PKG-$2.zip README.ja.txt
           #zip -r $PKG-$2.zip ghostbiff.c
-          zip -r $PKG-$2.zip po/ghostbiff.mo
+          #zip -r $PKG-$2.zip po/ghostbiff.mo
           zip -r $PKG-$2.zip *.xpm
           ;;
   esac
