@@ -30,6 +30,7 @@ int main(int argc, char* argv[])
 #endif
     HANDLE hMutex = CreateMutex(NULL,FALSE,"SakuraFMO");
     if ( hMutex == NULL ) {
+        g_print("No SakuraFMO\n");
         return 0;
     }
     if ( WaitForSingleObject(hMutex, 1000) != WAIT_TIMEOUT ) {
@@ -41,6 +42,7 @@ int main(int argc, char* argv[])
         HANDLE hFMO = OpenFileMapping(dwDesiredAccess,
                                       bInheritHandle,
                                       "Sakura");
+        HANDLE hwnd;
         if (hFMO != NULL){
             DWORD dwFileOffsetHigh = 0;
             DWORD dwFileOffsetLow = 0;
@@ -48,25 +50,47 @@ int main(int argc, char* argv[])
             DWORD dwNumberOfBytesToMap = 0;
             LPVOID lpBaseAddress = NULL;
             LPVOID lpMap = MapViewOfFileEx(hFMO,
-                            dwDesiredAccess,
-                            dwFileOffsetHigh,
-                            dwFileOffsetLow,
-                            dwNumberOfBytesToMap,
-                            lpBaseAddress);
+                                           dwDesiredAccess,
+                                           dwFileOffsetHigh,
+                                           dwFileOffsetLow,
+                                           dwNumberOfBytesToMap,
+                                           lpBaseAddress);
             if (lpMap != NULL) {
                 unsigned char *p = (unsigned char*)lpMap;
                 DWORD *lp = (DWORD*)lpMap;
                 int nIndex = 0;
                 g_print("%p 0x%04x %ld\n", lp, lp[0], lp[0]);
                 nIndex = 4;
+                unsigned char kbuf[1024];
+                unsigned char vbuf[1024];
+                int nkbuf=-1;
+                int nvbuf=-1;
+                int flg = 0;
                 while (nIndex < 1000){
                     if (p[nIndex] == 0x0d && p[nIndex+1] == 0x0a){
-                        puts("");
+                        printf("\nkey:%s\n", kbuf);
+                        vbuf[nvbuf]='\0';
+                        printf("value:%s\n", vbuf);
                         nIndex++;
+                        nkbuf=0;
+                        nvbuf=0;
+                        flg = 0;
+                        if (strstr(kbuf, ".hwnd")!=NULL){
+                            hwnd = (HANDLE)atoi(vbuf);
+                            printf("hwnd:%d\n", hwnd);
+                        }
                     } else if (p[nIndex] == 0x01){
                         printf(" => ");
+                        kbuf[nkbuf] = '\0';
+                        nvbuf=0;
+                        flg = 1;
                     }else if (isascii(p[nIndex])==TRUE){
                         printf("%c",p[nIndex]);
+                        if (flg){
+                            vbuf[nvbuf++] = p[nIndex];
+                        } else {
+                            kbuf[nkbuf++] = p[nIndex];
+                        }
                     }else {
                         g_print(" 0x%02x", p[nIndex]);
                     }
@@ -74,15 +98,17 @@ int main(int argc, char* argv[])
                 }
 
                 COPYDATASTRUCT cds;
-                CHAR lpszData[] = "SEND SSTP/1.4\r\nSender: カードキャプター\r\nScript: \\h\\s0あーあーあー。\\e\r\nHWnd: 2097556Charset: Shift_JISThis is DATA.\r\n";
+                CHAR lpszData[1024];
 
+                wsprintf(lpszData, "SEND SSTP/1.4\r\nSender: ghostbiff\r\nScript: \\h\\s0 HWND:%d\\e\r\nHWnd: %dCharset: Shift_JISThis is DATA.\r\n", hwnd, hwnd);
+                
                 cds.dwData = 1;
                 cds.cbData = sizeof(lpszData);
                 cds.lpData = (LPVOID)lpszData;
-                WPARAM wParam = (WPARAM)2097556;
+                WPARAM wParam = (WPARAM)hwnd;/*hwnd;*/
                 LPARAM lParam = (LPARAM)&cds;
 
-                SendMessage((HANDLE)2097556, WM_COPYDATA, wParam, lParam);
+                SendMessage((HANDLE)hwnd, WM_COPYDATA, wParam, lParam);
                 UnmapViewOfFile(lpMap);
             }
         }
@@ -92,3 +118,4 @@ int main(int argc, char* argv[])
     CloseHandle(hMutex);
     return 0;                   
 }
+    
