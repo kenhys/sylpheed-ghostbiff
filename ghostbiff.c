@@ -69,6 +69,12 @@ static GtkWidget *g_onoff_switch = NULL;
 static GtkTooltips *g_tooltip = NULL;
 static GKeyFile *g_keyfile=NULL;
 
+static gboolean summary_select_func	(GtkTreeSelection	*treeview,
+					 GtkTreeModel		*model,
+					 GtkTreePath		*path,
+					 gboolean		 cur_selected,
+					 gpointer		 data);
+
 void plugin_load(void)
 {
   syl_init_gettext(GHOSTBIFF, "lib/locale");
@@ -127,6 +133,16 @@ void plugin_load(void)
          NULL);
     }
   }
+
+#if 0
+  GtkWidget *g_summary = syl_plugin_summary_view_get();
+  if (g_summary!=NULL){
+    GtkTreeSelection *selection;
+    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(g_summary->treeview));
+	gtk_tree_selection_set_select_function(selection, summary_select_func,
+                                           g_summary, NULL);
+  }
+#endif
 }
 
 void plugin_unload(void)
@@ -384,3 +400,13 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
   CloseHandle(hMutex);
 
 }
+
+static gboolean summary_select_func	(GtkTreeSelection	*treeview,
+					 GtkTreeModel		*model,
+					 GtkTreePath		*path,
+					 gboolean		 cur_selected,
+					 gpointer		 data)
+{
+  return TRUE; 
+}
+
