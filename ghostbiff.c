@@ -33,6 +33,7 @@
 #include "utils.h"
 #include "alertpanel.h"
 #include "prefs_common.h"
+#include "summaryview.h"
 #include "bell_add.xpm"
 #include "bell_delete.xpm"
 
@@ -74,6 +75,10 @@ static gboolean summary_select_func	(GtkTreeSelection	*treeview,
 					 GtkTreePath		*path,
 					 gboolean		 cur_selected,
 					 gpointer		 data);
+
+static gboolean summary_key_pressed	(GtkWidget		*treeview,
+					 GdkEventKey		*event,
+					 SummaryView		*summaryview);
 
 void plugin_load(void)
 {
@@ -134,15 +139,14 @@ void plugin_load(void)
     }
   }
 
-#if 0
-  GtkWidget *g_summary = syl_plugin_summary_view_get();
+  SummaryView *g_summary = syl_plugin_summary_view_get();
   if (g_summary!=NULL){
-    GtkTreeSelection *selection;
-    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(g_summary->treeview));
-	gtk_tree_selection_set_select_function(selection, summary_select_func,
-                                           g_summary, NULL);
+      g_signal_connect(G_OBJECT(g_summary->treeview), "key_press_event",
+                       G_CALLBACK(summary_key_pressed), g_summary);
+      g_print("ghostbiff summary_key_pressed g_signal_connect !!!\n");
+  }else{
+      g_print("ghostbiff summary_key_pressed g_signal_connect error!!!\n");
   }
-#endif
 }
 
 void plugin_unload(void)
@@ -399,6 +403,13 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
 
   CloseHandle(hMutex);
 
+}
+
+static gboolean summary_key_pressed	(GtkWidget		*treeview,
+					 GdkEventKey		*event,
+					 SummaryView		*summaryview)
+{
+    g_print("ghostbiff summary_key_pressed\n");
 }
 
 static gboolean summary_select_func	(GtkTreeSelection	*treeview,
