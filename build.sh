@@ -1,7 +1,8 @@
 
-TARGET=ghostbiff.dll
-OBJS=ghostbiff.o
-PKG=sylpheed-ghostbiff
+NAME=ghostbiff
+TARGET=$NAME.dll
+OBJS=$NAME.o
+PKG=sylpheed-$NAME
 LIBSYLPH=./lib/libsylph-0-1.a
 LIBSYLPHEED=./lib/libsylpheed-plugin-0-1.a
 #LIBS=" -lglib-2.0-0  -lintl"
@@ -9,7 +10,7 @@ LIBS=" `pkg-config --libs glib-2.0 gobject-2.0 gtk+-2.0`"
 INC=" -I. -I../../ -I../../libsylph -I../../src `pkg-config --cflags glib-2.0 cairo gdk-2.0 gtk+-2.0`"
 DEF=" -DHAVE_CONFIG_H"
 if [ -z "$1" ]; then
-    com="gcc -Wall -c $DEF $INC ghostbiff.c"
+    com="gcc -Wall -c $DEF $INC $NAME.c"
     echo $com
     eval $com
     if [ $? != 0 ]; then
@@ -25,19 +26,19 @@ if [ ! -z "$1" ]; then
   case "$1" in
       pot)
           mkdir -p po
-          com="xgettext ghostbiff.c -k_ -kN_ -o po/ghostbiff.pot"
+          com="xgettext $NAME.c -k_ -kN_ -o po/$NAME.pot"
           ;;
       po)
-          com="msgmerge po/ja.po po/ghostbiff.pot -o po/ja.po"
+          com="msgmerge po/ja.po po/$NAME.pot -o po/ja.po"
           ;;
       mo)
-          com="msgfmt po/ja.po -o po/ghostbiff.mo"
+          com="msgfmt po/ja.po -o po/$NAME.mo"
           ;;
       sstp)
           com="gcc -o directsstp.exe directsstp.c $INC $LIBS"
           ;;
       release)
-          zip $PKG-$2.zip ghostbiff.dll
+          zip $PKG-$2.zip $TARGET
           zip -r $PKG-$2.zip README.ja.txt
           #zip -r $PKG-$2.zip ghostbiff.c
           #zip -r $PKG-$2.zip po/ghostbiff.mo
