@@ -3,3 +3,8 @@
 *.png
 po/*.mo
 lib
+aq_dic
+phont
+*.log
+*.tsv
+*.orig

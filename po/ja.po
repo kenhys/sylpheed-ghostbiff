@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-04-05 09:27+0900\n"
+"POT-Creation-Date: 2011-04-22 16:33+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: HAYASHI Kentaro <kenhys@gmail.com>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,47 +16,136 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ghostbiff.c:50
+#: ghostbiff.c:63
 msgid "Ghostbiff mail biff Plug-in"
 msgstr "Ghostbiff メール新着通知プラグイン"
 
-#: ghostbiff.c:51
-#, fuzzy
+#: ghostbiff.c:64
 msgid "Simple biff plug-in for Sylpheed"
 msgstr "DirectSSTPによるシンプルな新着通知プラグイン for Sylpheed"
 
-#: ghostbiff.c:76 ghostbiff.c:77
+#: ghostbiff.c:73
+msgid ""
+"Ghostbiff is distributed by GPL license.\n"
+"\n"
+"Copyright (C) 2011 HAYASHI Kentaro <kenhys@gmail.com>\n"
+"ghostbiff contains following resource.\n"
+"\n"
+"Silk icon set 1.3: Copyright (C) Mark James\n"
+"Licensed under a Creative Commons Attribution 2.5 License.\n"
+"http://www.famfamfam.com/lab/icons/silk/\n"
+"\n"
+"\n"
+"\n"
+msgstr ""
+"Ghostbiff はGPLでライセンスされています\n"
+"\n"
+"Copyright (C) 2011 HAYASHI Kentaro <kenhys@gmail.com>\n"
+"ghostbiff は以下のリソースを利用しています。\n"
+"\n"
+"Silk icon set 1.3: Copyright (C) Mark James\n"
+"Licensed under a Creative Commons Attribution 2.5 License.\n"
+"http://www.famfamfam.com/lab/icons/silk/\n"
+"\n"
+"\n"
+"\n"
+
+#: ghostbiff.c:172 ghostbiff.c:173
 msgid "mail biff Plug-in"
 msgstr "メール新着通知プラグイン"
 
-#: ghostbiff.c:80 ghostbiff.c:214
-msgid "Ghostbiff Settings"
-msgstr "Ghostbiffプラグイン設定"
+#: ghostbiff.c:176
+msgid "Biff plugin settings [ghostbiff]"
+msgstr "メール新着通知プラグイン設定 [ghostbiff]"
 
-#: ghostbiff.c:126 ghostbiff.c:254
+#: ghostbiff.c:223 ghostbiff.c:440
 msgid "Ghostbiff is enabled. Click the icon to disable plugin."
 msgstr ""
 "Ghostbiffを有効にしました。プラグインを無効にするにはアイコンをクリックして下"
 "さい"
 
-#: ghostbiff.c:222
-msgid "Enable plugin on startup."
-msgstr "起動時にプラグインを有効化"
+#: ghostbiff.c:363
+msgid "Ghostbiff Settings"
+msgstr "メール新着プラグイン設定"
 
-#: ghostbiff.c:248 ghostbiff.c:257
+#: ghostbiff.c:434 ghostbiff.c:443
 msgid "Ghostbiff"
 msgstr ""
 
-#: ghostbiff.c:248
+#: ghostbiff.c:434
 msgid "ghostbiff plugin is enabled."
 msgstr "ghostbiffプラグインを有効化しました"
 
-#: ghostbiff.c:257
+#: ghostbiff.c:443
 msgid "ghostbiff plugin is disabled."
 msgstr "ghostbiffプラグインを無効化しました"
 
-#: ghostbiff.c:263
+#: ghostbiff.c:449
 msgid "Ghostbiff is disabled. Click the icon to enable plugin."
 msgstr ""
 "Ghostbiffは無効化されました。プラグインを有効にするにはアイコンをクリックして"
 "下さい"
+
+#: ghostbiff.c:648
+msgid "Enable plugin on startup."
+msgstr "起動時にプラグインを有効化"
+
+#: ghostbiff.c:652
+msgid "Enable AquesTalk2,AqKanji2Koe.[Experimental]"
+msgstr "AquesTalk2,AqKanji2Koeを有効にする"
+
+#: ghostbiff.c:655
+msgid "General"
+msgstr "全般"
+
+#: ghostbiff.c:671
+msgid "AquesTalk2 aq_dic directory"
+msgstr "AquesTalk2 aq_dic ディレクトリ指定"
+
+#: ghostbiff.c:676
+msgid "Select aq_dic directory"
+msgstr "aq_dicディレクトリを指定して下さい"
+
+#: ghostbiff.c:683
+msgid "AquesTalk2 phont directory"
+msgstr "AquesTalk2 phont ディレクトリ指定"
+
+#: ghostbiff.c:690
+msgid "Select phont directory"
+msgstr "phontディレクトリを指定して下さい"
+
+#: ghostbiff.c:708
+msgid "Read what when you receive mail"
+msgstr "メールを受信した際に読み上げる"
+
+#: ghostbiff.c:710 ghostbiff.c:733
+msgid "subject"
+msgstr "件名"
+
+#: ghostbiff.c:711 ghostbiff.c:734
+msgid "content"
+msgstr "本文"
+
+#: ghostbiff.c:731
+msgid "Read what when you preview mail"
+msgstr "メールを表示した際に読み上げる"
+
+#: ghostbiff.c:754
+msgid "Test sample"
+msgstr "読み上げサンプル"
+
+#: ghostbiff.c:759
+msgid "sample text"
+msgstr "本日は晴天なり"
+
+#: ghostbiff.c:761
+msgid "Play"
+msgstr "再生"
+
+#: ghostbiff.c:778
+msgid "AquesTalk"
+msgstr ""
+
+#: ghostbiff.c:815
+msgid "About"
+msgstr "情報"

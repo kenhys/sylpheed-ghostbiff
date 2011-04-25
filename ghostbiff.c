@@ -18,6 +18,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+
 #include "defs.h"
 
 #include <glib.h>
@@ -37,39 +38,122 @@
 #include "bell_add.xpm"
 #include "bell_delete.xpm"
 
+#ifdef USE_AQUESTALK
+#ifdef __MINGW32__
+#define AqKanji2Koe_Create _AqKanji2Koe_Create
+#define AqKanji2Koe_Convert _AqKanji2Koe_Convert
+#define AqKanji2Koe_Release _AqKanji2Koe_Release
+#endif
+#include "AqKanji2Koe.h"
+#include "AquesTalk2Da.h"
+#endif
 
 #include <glib.h>
 #include <glib/gi18n-lib.h>
 #include <locale.h>
+
 
 #define _(String) dgettext("ghostbiff", String)
 #define N_(String) gettext_noop(String)
 #define gettext_noop(String) (String)
 
 #define GHOSTBIFF "ghostbiff"
+#define GHOSTBIFFRC "ghostbiffrc"
 
 #define PLUGIN_NAME N_("Ghostbiff mail biff Plug-in")
 #define PLUGIN_DESC N_("Simple biff plug-in for Sylpheed")
 
 static SylPluginInfo info = {
   N_(PLUGIN_NAME),
-  "0.1.0",
+  "0.2.0",
   "HAYASHI Kentaro",
   N_(PLUGIN_DESC)
 };
 
+static gchar* g_copyright = N_(""
+"Ghostbiff is distributed by GPL license.\n"
+"\n"
+"Copyright (C) 2011 HAYASHI Kentaro <kenhys@gmail.com>"
+"\n"
+"ghostbiff contains following resource.\n"
+"\n"
+"Silk icon set 1.3: Copyright (C) Mark James\n"
+"Licensed under a Creative Commons Attribution 2.5 License.\n"
+"http://www.famfamfam.com/lab/icons/silk/\n"
+"\n"
+"\n"
+#ifdef USE_AQUESTALK
+""
+""
+#endif
+"\n");
+
+typedef struct _GhostOption GhostOption;
+
+struct _GhostOption {
+  /* General section */
+
+  /* full path to ghostbiffrc*/
+  gchar *rcpath;
+  /* rcfile */
+  GKeyFile *rcfile;
+
+  /* startup check in general */
+  GtkWidget *chk_startup;
+  /* aquestalk check in general */
+  GtkWidget *chk_aquest;
+
+  gboolean enable_aquest;
+
+  GtkWidget *aq_dic_btn;
+  GtkWidget *phont_btn;
+  GtkWidget *phont_cmb;
+  GtkWidget *new_subject_btn;
+  GtkWidget *new_content_btn;
+  GtkWidget *show_subject_btn;
+  GtkWidget *show_content_btn;
+  GtkWidget *input_entry;
+  
+};
+
 static gboolean g_enable = FALSE;
+static GhostOption g_opt;
+static HANDLE g_aquestalk2da = NULL;
+static HANDLE g_aqkanji2koe = NULL;
 
 static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num);
+static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers);
 static void exec_ghostbiff_menu_cb(void);
 static void exec_ghostbiff_onoff_cb(void);
+static void send_directsstp(MsgInfo *msginfo);
+static void read_mail_by_aquestalk(MsgInfo *msginfo);
+
+static void play_btn_clicked(GtkButton *button, gpointer data);
+static void phont_file_set(GtkFileChooserButton *widget, gpointer data);
+
+static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey);
+static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey);
+static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey);
+
+#if USE_AQUESTALK
+typedef int __stdcall (*AQUESTALK2DA_PLAYSYNC)(const char *koe, int iSpeed, void *phontDat);
+typedef H_AQTKDA __stdcall (*AQUESTALK2DA_CREATE)();
+typedef void __stdcall (*AQUESTALK2DA_RELEASE)(H_AQTKDA hMe);
+typedef void * __stdcall (*AQKANJI2KOE_CREATE)(const char *pathDic, int *pErr);
+typedef void  __stdcall (*AQKANJI2KOE_RELEASE)(void *hAqKanji2Koe);
+typedef int __stdcall (*AQKANJI2KOE_CONVERT)(void *hAqKanji2Koe, const char *kanji, char *koe, int nBufKoe);
+AQKANJI2KOE_CREATE proc_aqkanji_create;
+AQKANJI2KOE_RELEASE proc_aqkanji_release;
+AQKANJI2KOE_CONVERT proc_aqkanji_convert;
+AQUESTALK2DA_PLAYSYNC proc_aqda_playsync;
+#endif
 
 static GtkWidget *g_plugin_on = NULL;
 static GtkWidget *g_plugin_off = NULL;
 static GtkWidget *g_onoff_switch = NULL;
 static GtkTooltips *g_tooltip = NULL;
-static GKeyFile *g_keyfile=NULL;
 
+#if 0
 static gboolean summary_select_func	(GtkTreeSelection	*treeview,
 					 GtkTreeModel		*model,
 					 GtkTreePath		*path,
@@ -79,6 +163,7 @@ static gboolean summary_select_func	(GtkTreeSelection	*treeview,
 static gboolean summary_key_pressed	(GtkWidget		*treeview,
 					 GdkEventKey		*event,
 					 SummaryView		*summaryview);
+#endif
 
 void plugin_load(void)
 {
@@ -88,9 +173,11 @@ void plugin_load(void)
   debug_print(dgettext(GHOSTBIFF, "mail biff Plug-in"));
 
   syl_plugin_add_menuitem("/Tools", NULL, NULL, NULL);
-  syl_plugin_add_menuitem("/Tools", _("Ghostbiff Settings"), exec_ghostbiff_menu_cb, NULL);
+  syl_plugin_add_menuitem("/Tools", _("Biff plugin settings [ghostbiff]"), exec_ghostbiff_menu_cb, NULL);
 
   g_signal_connect(syl_app_get(), "add-msg", G_CALLBACK(exec_ghostbiff_cb), NULL);
+
+  syl_plugin_signal_connect("messageview-show", G_CALLBACK(exec_messageview_show_cb), NULL);
 
   GtkWidget *mainwin = syl_plugin_main_window_get();
   GtkWidget *statusbar = syl_plugin_main_window_get_statusbar();
@@ -122,12 +209,11 @@ void plugin_load(void)
   info.name = g_strdup(_(PLUGIN_NAME));
   info.description = g_strdup(_(PLUGIN_DESC));
 
-  gchar *rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
-  g_keyfile = g_key_file_new();
-  if (g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
-    gboolean startup=g_key_file_get_boolean (g_keyfile, GHOSTBIFF, "startup", NULL);
+  g_opt.rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, GHOSTBIFFRC, NULL);
+  g_opt.rcfile = g_key_file_new();
+  if (g_key_file_load_from_file(g_opt.rcfile, g_opt.rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
+    gboolean startup=g_key_file_get_boolean (g_opt.rcfile, GHOSTBIFF, "startup", NULL);
     debug_print("startup:%s", startup ? "true" : "false");
-    g_free(rcpath);
     if (startup){
       g_enable=TRUE;
       gtk_widget_hide(g_plugin_off);
@@ -139,18 +225,40 @@ void plugin_load(void)
     }
   }
 
-  SummaryView *g_summary = syl_plugin_summary_view_get();
-  if (g_summary!=NULL){
-      g_signal_connect(G_OBJECT(g_summary->treeview), "key_press_event",
-                       G_CALLBACK(summary_key_pressed), g_summary);
-      g_print("ghostbiff summary_key_pressed g_signal_connect !!!\n");
+  /* test dll load */
+  g_aquestalk2da = LoadLibrary(L"AquesTalk2Da.dll");
+  g_aqkanji2koe = LoadLibrary(L"AqKanji2Koe.dll");
+  if (g_aquestalk2da != NULL && g_aqkanji2koe != NULL){
+    proc_aqkanji_create =(AQKANJI2KOE_CREATE)GetProcAddress(g_aqkanji2koe, "_AqKanji2Koe_Create@8");
+    if (proc_aqkanji_create==NULL){
+      debug_print("GetProcAddress AqKanji2Koe_Create failed\n");
+    }
+    proc_aqkanji_convert =(AQKANJI2KOE_CONVERT)GetProcAddress(g_aqkanji2koe, "_AqKanji2Koe_Convert@16");
+    if (proc_aqkanji_convert==NULL){
+      debug_print("GetProcAddress AqKanji2Koe_Convert failed\n");
+    }
+    proc_aqkanji_release =(AQKANJI2KOE_RELEASE)GetProcAddress(g_aqkanji2koe, "_AqKanji2Koe_Release@4");
+    if (proc_aqkanji_release==NULL){
+      debug_print("GetProcAddress AqKanji2Koe_Release failed\n");
+    }
+    proc_aqda_playsync =(AQUESTALK2DA_PLAYSYNC)GetProcAddress(g_aquestalk2da, "AquesTalk2Da_PlaySync");
+    if (proc_aqda_playsync==NULL){
+      debug_print("GetProcAddress AquesTalk2Da_Play failed\n");
+    }
   }else{
-      g_print("ghostbiff summary_key_pressed g_signal_connect error!!!\n");
+    if (g_aquestalk2da == NULL){
+      debug_print("LoadLibrary AquesTalk2Da.dll failed\n");
+    }
+    if (g_aqkanji2koe == NULL){
+      debug_print("LoadLibrary AqKanji2Koe.dll failed\n");
+    }
   }
+
 }
 
 void plugin_unload(void)
 {
+  g_free(g_opt.rcpath);
 }
 
 SylPluginInfo *plugin_info(void)
@@ -163,26 +271,48 @@ gint plugin_interface_version(void)
   return SYL_PLUGIN_INTERFACE_VERSION;
 }
 
-static GtkWidget *g_address;
-static GtkWidget *g_startup;
-
 static void prefs_ok_cb(GtkWidget *widget, gpointer data)
 {
-  gchar *rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
-  g_keyfile = g_key_file_new();
-  g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL);
 
-  gboolean startup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_startup));
-  g_key_file_set_boolean (g_keyfile, GHOSTBIFF, "startup", startup);
-  debug_print("startup:%d\n", startup);
+  g_key_file_load_from_file(g_opt.rcfile, g_opt.rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL);
+
+  gboolean status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.chk_startup));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "startup", status);
+  debug_print("startup:%s\n", status ? "TRUE" : "FALSE");
+
+  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.chk_aquest));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "aquest", status);
+  debug_print("aquest:%s\n", status ? "TRUE" : "FALSE");
+
+  gchar *buf = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
+  debug_print("aq_dic:%s\n", buf);
+  g_key_file_set_string (g_opt.rcfile, GHOSTBIFF, "aq_dic_path", buf);
+
+  buf = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.phont_btn));
+  debug_print("phont_path:%s\n", buf);
+  g_key_file_set_string (g_opt.rcfile, GHOSTBIFF, "phont_path", buf);
+  
+  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_subject_btn));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "new_subject", status);
+  debug_print("new_subject:%s\n", status ? "TRUE" : "FALSE");
+
+  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "new_content", status);
+  debug_print("new_content:%s\n", status ? "TRUE" : "FALSE");
+
+  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_subject_btn));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "show_subject", status);
+  debug_print("show_subject:%s\n", status ? "TRUE" : "FALSE");
+
+  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn));
+  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "show_content", status);
+  debug_print("show_content:%s\n", status ? "TRUE" : "FALSE");
 
   /**/
   gsize sz;
-  gchar *buf=g_key_file_to_data(g_keyfile, &sz, NULL);
-  g_file_set_contents(rcpath, buf, sz, NULL);
+  buf=g_key_file_to_data(g_opt.rcfile, &sz, NULL);
+  g_file_set_contents(g_opt.rcpath, buf, sz, NULL);
     
-  g_free(rcpath);
-
   gtk_widget_destroy(GTK_WIDGET(data));
 }
 static void prefs_cancel_cb(GtkWidget *widget, gpointer data)
@@ -201,7 +331,6 @@ static void exec_ghostbiff_menu_cb(void)
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_container_set_border_width(GTK_CONTAINER(window), 8);
-  /*gtk_widget_set_size_request(window, 200, 100);*/
   gtk_window_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
   gtk_window_set_modal(GTK_WINDOW(window), TRUE);
   gtk_window_set_policy(GTK_WINDOW(window), FALSE, TRUE, FALSE);
@@ -210,6 +339,18 @@ static void exec_ghostbiff_menu_cb(void)
   vbox = gtk_vbox_new(FALSE, 6);
   gtk_widget_show(vbox);
   gtk_container_add(GTK_CONTAINER(window), vbox);
+
+  /* notebook */ 
+  GtkWidget *notebook = gtk_notebook_new();
+  /* main tab */
+  create_config_main_page(notebook, g_opt.rcfile);
+  /* AquesTalk option tab */
+  create_config_aques_page(notebook, g_opt.rcfile);
+  /* about, copyright tab */
+  create_config_about_page(notebook, g_opt.rcfile);
+
+  gtk_widget_show(notebook);
+  gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
   confirm_area = gtk_hbutton_box_new();
   gtk_button_box_set_layout(GTK_BUTTON_BOX(confirm_area), GTK_BUTTONBOX_END);
@@ -239,23 +380,47 @@ static void exec_ghostbiff_menu_cb(void)
                    G_CALLBACK(prefs_cancel_cb), window);
 
   /* startup settings */
-  g_startup = gtk_check_button_new_with_label(_("Enable plugin on startup."));
-  gtk_widget_show(g_startup);
-  gtk_box_pack_start(GTK_BOX(vbox), g_startup, FALSE, FALSE, 0);
 
+
+      
   /* load settings */
-  gchar *rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, "ghostbiffrc", NULL);
-  g_keyfile = g_key_file_new();
-  if (g_key_file_load_from_file(g_keyfile, rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
-    gchar *startup=g_key_file_get_string (g_keyfile, GHOSTBIFF, "startup", NULL);
-    debug_print("startup:%s", startup);
-    if (strcmp(startup, "true")==0){
-      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_startup), TRUE);
+  if (g_key_file_load_from_file(g_opt.rcfile, g_opt.rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
+    gboolean status=g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "startup", NULL);
+    debug_print("startup:%s\n", status ? "TRUE" : "FALSE");
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.chk_startup), TRUE);
     }
-    gchar *to=g_key_file_get_string (g_keyfile, GHOSTBIFF, "to", NULL);
+
+    if (g_aquestalk2da == NULL || g_aqkanji2koe == NULL){
+      g_opt.enable_aquest=FALSE;
+      /* disable check */
+      gtk_widget_set_sensitive(GTK_WIDGET(g_opt.chk_aquest), FALSE);
+    } else {
+      g_opt.enable_aquest=TRUE;
+    }
+
+    status=g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "aquest", NULL);
+    debug_print("aquest:%s\n", status ? "TRUE" : "FALSE");
+
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.chk_aquest), TRUE);
+    }
+
+    gchar *buf = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "aq_dic_path", NULL);
+    if (buf != NULL){
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn), buf);
+    }
+
+    buf = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont_path", NULL);
+    if (buf != NULL){
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(g_opt.phont_btn), buf);
+    }
+
+    /*    gchar *to=g_key_file_get_string (g_opt.rcfile, GHOSTBIFF, "to", NULL);
     gtk_entry_set_text(GTK_ENTRY(g_address), to);
+    */
   }
-  g_free(rcpath);
+  gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), 0);
 
   gtk_widget_show(window);
 }
@@ -304,7 +469,14 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
 
   MsgInfo *msginfo = folder_item_get_msginfo(item, num);
   
-  HANDLE hMutex = CreateMutex(NULL,FALSE,"SakuraFMO");
+  send_directsstp(msginfo);
+
+  read_mail_by_aquestalk(msginfo);
+}
+
+static void send_directsstp(MsgInfo *msginfo)
+{
+  HANDLE hMutex = CreateMutex(NULL,FALSE,L"SakuraFMO");
   if ( hMutex == NULL ) {
     g_print("No SakuraFMO\n");
     return 0;
@@ -314,10 +486,9 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
 
     DWORD dwDesiredAccess = FILE_MAP_READ;
     BOOL bInheritHandle = TRUE;
-    LPCTSTR lpName;
     HANDLE hFMO = OpenFileMapping(dwDesiredAccess,
                                   bInheritHandle,
-                                  "Sakura");
+                                  L"Sakura");
     HANDLE hwnd;
     if (hFMO != NULL){
       DWORD dwFileOffsetHigh = 0;
@@ -405,19 +576,311 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
 
 }
 
-static gboolean summary_key_pressed	(GtkWidget		*treeview,
-					 GdkEventKey		*event,
-					 SummaryView		*summaryview)
+static void read_mail_by_aquestalk(MsgInfo *msginfo)
 {
-    g_print("ghostbiff summary_key_pressed\n");
+  gchar *aq_dic = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "aq_dic_path", NULL);
+  debug_print("aq_dic:%s\n", aq_dic);
+
+  gchar *phont_dic = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont_path", NULL);
+  debug_print("phont_btn:%s\n", phont_dic);
+
+  int nErr=0;
+  void* aq=NULL;
+  if (proc_aqkanji_create==NULL){
+    debug_print("AqKanji2Koe_Create symbol not found\n");
+    return;
+  }
+
+  aq=proc_aqkanji_create(aq_dic, &nErr);
+  if (aq==NULL){
+    debug_print("AqKanji2Koe_Create error\n");
+    return;
+  }
+
+  CodeConverter *cconv = conv_code_converter_new("UTF-8", "Shift_JIS");
+  gchar *text = unmime_header(msginfo->subject);
+  gchar *sjis = conv_convert(cconv, text);
+  char buf[1024];
+  if (proc_aqkanji_convert==NULL){
+    debug_print("AqKanji2Koe_Convert symbol not found\n");
+    return;
+  }
+  if (proc_aqkanji_convert){
+    proc_aqkanji_convert(aq, sjis, buf, 1024);
+  }
+  
+  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, "aq_rm.phont", NULL);
+  GError *perr = NULL;
+  GMappedFile *gmap=NULL;
+  g_print("%s\n", phont_path);
+  gmap = g_mapped_file_new(phont_path, FALSE, &perr);
+  if (gmap!=NULL){
+    gchar *pc = g_mapped_file_get_contents(gmap);
+
+    proc_aqda_playsync(buf, 100, pc);
+
+    g_mapped_file_free(gmap);
+  }
+
+  proc_aqkanji_release(aq);
 }
 
-static gboolean summary_select_func	(GtkTreeSelection	*treeview,
-					 GtkTreeModel		*model,
-					 GtkTreePath		*path,
-					 gboolean		 cur_selected,
-					 gpointer		 data)
+static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers)
 {
-  return TRUE; 
+    g_print("ghostbiff messageview-show\n");
+    g_print(msginfo->subject);
+    g_print(msginfo->from);
+    g_print(msginfo->to);
+    
 }
 
+/**/
+static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey)
+{
+  debug_print("create_config_main_page\n");
+  if (notebook == NULL){
+    return NULL;
+  }
+  /* startup */
+  if (pkey!=NULL){
+  }
+  GtkWidget *vbox = gtk_vbox_new(FALSE, 6);
+  g_opt.chk_startup = gtk_check_button_new_with_label(_("Enable plugin on startup."));
+  gtk_widget_show(g_opt.chk_startup);
+  gtk_box_pack_start(GTK_BOX(vbox), g_opt.chk_startup, FALSE, FALSE, 0);
+
+  g_opt.chk_aquest = gtk_check_button_new_with_label(_("Enable AquesTalk2,AqKanji2Koe.[Experimental]"));
+  gtk_box_pack_start(GTK_BOX(vbox), g_opt.chk_aquest, FALSE, FALSE, 0);
+
+  GtkWidget *general_lbl = gtk_label_new(_("General"));
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), vbox, general_lbl);
+  gtk_widget_show_all(notebook);
+  return NULL;
+}
+
+/* AquesTalk option tab */
+static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
+{
+  debug_print("create_config_aques_page\n");
+   if (notebook == NULL){
+        return NULL;
+    }
+
+    GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+    
+    /* set aq_dic file directory */
+    GtkWidget *aq_dic_frm = gtk_frame_new(_("AquesTalk2 aq_dic directory"));
+    GtkWidget *aq_dic_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(aq_dic_align), 6, 6, 6, 6);
+    GtkWidget *aq_frm_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(aq_frm_align), 6, 6, 6, 6);
+    g_opt.aq_dic_btn = gtk_file_chooser_button_new(N_("Select aq_dic directory"), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
+    gtk_container_add(GTK_CONTAINER(aq_dic_align), g_opt.aq_dic_btn);
+    gtk_container_add(GTK_CONTAINER(aq_dic_frm), aq_dic_align);
+    gtk_container_add(GTK_CONTAINER(aq_frm_align), aq_dic_frm);
+    gtk_widget_show_all(aq_frm_align);
+
+    /* set phont file directory */
+    GtkWidget *phont_frm = gtk_frame_new(_("AquesTalk2 phont directory"));
+    GtkWidget *phont_btn_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(phont_btn_align), 6, 6, 6, 6);
+    GtkWidget *phont_box = gtk_vbox_new(FALSE, 0);
+    GtkWidget *phont_frm_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(phont_frm_align), 6, 6, 6, 6);
+
+    g_opt.phont_btn = gtk_file_chooser_button_new(N_("Select phont directory"), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
+    /* phont selection */
+    g_opt.phont_cmb = gtk_combo_new();
+
+    gtk_box_pack_start(GTK_BOX(phont_box), g_opt.phont_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(phont_box), g_opt.phont_cmb, FALSE, FALSE, 0);
+    
+    gtk_container_add(GTK_CONTAINER(phont_btn_align), phont_box);
+    gtk_container_add(GTK_CONTAINER(phont_frm), phont_btn_align);
+    gtk_container_add(GTK_CONTAINER(phont_frm_align), phont_frm);
+    gtk_widget_show_all(phont_frm_align);
+
+    
+    
+    g_signal_connect(GTK_FILE_CHOOSER(g_opt.phont_btn), "file-set", G_CALLBACK(phont_file_set), g_opt.phont_cmb);
+
+    /* talk setting when you received new mail.
+       read subject,body check button */
+    GtkWidget *new_frm = gtk_frame_new(_("Read what when you receive mail"));
+    GtkWidget *new_hbox = gtk_hbox_new(FALSE, 6);
+    g_opt.new_subject_btn = gtk_check_button_new_with_label(_("subject"));
+    g_opt.new_content_btn = gtk_check_button_new_with_label(_("content"));
+    GtkWidget *new_frm_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(new_frm_align), 6, 6, 6, 6);
+    gtk_box_pack_start(GTK_BOX(new_hbox), g_opt.new_subject_btn, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(new_hbox), g_opt.new_content_btn, FALSE, FALSE, 6);
+    gtk_container_add(GTK_CONTAINER(new_frm), new_hbox);
+    gtk_container_add(GTK_CONTAINER(new_frm_align), new_frm);
+    gtk_widget_show_all(new_frm_align);
+
+    gboolean status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "new_subject", NULL);
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.new_subject_btn), TRUE);
+    }
+    status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "new_content", NULL);
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn), TRUE);
+    }
+    
+    /* talk setting when you preview each mail.
+       subject,body check button */
+    GtkWidget *preview_frm = gtk_frame_new(_("Read what when you preview mail"));
+    GtkWidget *pv_hbox = gtk_hbox_new(FALSE, 6);
+    g_opt.show_subject_btn = gtk_check_button_new_with_label(_("subject"));
+    g_opt.show_content_btn = gtk_check_button_new_with_label(_("content"));
+    GtkWidget *pv_frm_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(pv_frm_align), 6, 6, 6, 6);
+    gtk_box_pack_start(GTK_BOX(pv_hbox), g_opt.show_subject_btn, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(pv_hbox), g_opt.show_content_btn, FALSE, FALSE, 6);
+    gtk_container_add(GTK_CONTAINER(preview_frm), pv_hbox);
+    gtk_container_add(GTK_CONTAINER(pv_frm_align), preview_frm);
+    gtk_widget_show_all(pv_frm_align);
+
+    status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "show_subject", NULL);
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.show_subject_btn), TRUE);
+    }
+    status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "show_content", NULL);
+    if (status!=FALSE){
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn), TRUE);
+    }
+    
+
+    /* input sample text */
+    GtkWidget *sample_frm = gtk_frame_new(_("Test sample"));
+    GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
+    g_opt.input_entry = gtk_entry_new();
+    GtkWidget *sample_frm_align = gtk_alignment_new(0, 0, 1, 1);
+    gtk_alignment_set_padding(GTK_ALIGNMENT(sample_frm_align), 6, 6, 6, 6);
+    gtk_entry_set_text(GTK_ENTRY(g_opt.input_entry), _("sample text"));
+    /* play sample text */
+    GtkWidget *play_btn = gtk_button_new_with_label(_("Play"));
+    gtk_box_pack_start(GTK_BOX(hbox), g_opt.input_entry, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), play_btn, TRUE, TRUE, 0);
+    gtk_container_add(GTK_CONTAINER(sample_frm), hbox);
+    gtk_container_add(GTK_CONTAINER(sample_frm_align), sample_frm);
+    gtk_widget_show_all(sample_frm_align);
+
+    g_signal_connect(GTK_BUTTON(play_btn), "clicked",
+                     G_CALLBACK(play_btn_clicked), NULL);
+    
+    gtk_box_pack_start(GTK_BOX(vbox), aq_frm_align, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), phont_frm_align, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), new_frm_align, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(vbox), pv_frm_align, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(vbox), sample_frm_align, FALSE, FALSE, 6);
+    
+    gtk_widget_show_all(vbox);
+    GtkWidget *general_lbl = gtk_label_new(_("AquesTalk"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), vbox, general_lbl);
+    gtk_widget_show_all(notebook);
+    return NULL;
+}
+
+/* about, copyright tab */
+static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey)
+{
+  debug_print("create_config_about_page\n");
+    if (notebook == NULL){
+        return NULL;
+    }
+    GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
+    GtkWidget *vbox = gtk_vbox_new(FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 6);
+
+    GtkWidget *misc = gtk_label_new("Ghostbiff");
+    gtk_box_pack_start(GTK_BOX(vbox), misc, FALSE, TRUE, 6);
+
+    misc = gtk_label_new(PLUGIN_DESC);
+    gtk_box_pack_start(GTK_BOX(vbox), misc, FALSE, TRUE, 6);
+
+    misc = gtk_label_new("Copyright (C) 2011 HAYASHI Kentaro <kenhys@gmail.com>");
+    gtk_box_pack_start(GTK_BOX(vbox), misc, FALSE, TRUE, 6);
+    
+    /* copyright */
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(vbox), scrolled);
+
+    GtkTextBuffer *tbuffer = gtk_text_buffer_new(NULL);
+    gtk_text_buffer_set_text(tbuffer, g_copyright, strlen(g_copyright));
+    GtkWidget *tview = gtk_text_view_new_with_buffer(tbuffer);
+    gtk_container_add(GTK_CONTAINER(scrolled), tview);
+    
+    gtk_box_pack_start(GTK_BOX(vbox), scrolled, FALSE, FALSE, 6);
+    
+    /**/
+    GtkWidget *general_lbl = gtk_label_new(_("About"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), hbox, general_lbl);
+    gtk_widget_show_all(notebook);
+    return NULL;
+}
+
+static void play_btn_clicked(GtkButton *button, gpointer data)
+{
+  gchar *aq_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
+  debug_print("aq_dic:%s\n", aq_dic);
+
+  gchar *phont_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.phont_btn));
+  debug_print("phont_btn:%s\n", phont_dic);
+
+  int nErr=0;
+  void* aq=NULL;
+  if (proc_aqkanji_create==NULL){
+    debug_print("AqKanji2Koe_Create symbol not found\n");
+    return;
+  }
+
+  aq=proc_aqkanji_create(aq_dic, &nErr);
+  if (aq==NULL){
+    debug_print("AqKanji2Koe_Create error\n");
+    return;
+  }
+
+  CodeConverter *cconv = conv_code_converter_new("UTF-8", "Shift_JIS");
+  gchar *text = gtk_entry_get_text(GTK_ENTRY(g_opt.input_entry));
+  gchar *sjis = conv_convert(cconv, text);
+  char buf[1024];
+
+  if (proc_aqkanji_convert==NULL){
+    debug_print("AqKanji2Koe_Convert symbol not found\n");
+    return;
+  }
+  proc_aqkanji_convert(aq, sjis, buf, 1024);
+  
+  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, "aq_rm.phont", NULL);
+  GError *perr = NULL;
+  GMappedFile *gmap=NULL;
+  g_print("%s\n", phont_path);
+  gmap = g_mapped_file_new(phont_path, FALSE, &perr);
+  if (gmap!=NULL){
+    gchar *pc = g_mapped_file_get_contents(gmap);
+
+    proc_aqda_playsync(buf, 100, pc);
+
+    g_mapped_file_free(gmap);
+  }
+
+  if (proc_aqkanji_release==NULL){
+    debug_print("AqKanji2Koe_Release symbol not found\n");
+    return;
+  }
+  proc_aqkanji_release(aq);
+    
+}
+
+/* GTK 2.12 or later */
+static void phont_file_set(GtkFileChooserButton *widget, gpointer data)
+{
+    debug_print("phont_file_set called.");
+    gchar *phont_dir = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(widget));
+    /* use GIO *.phont */
+    GList* items = NULL;
+
+    items = g_list_append(items, "test");
+    gtk_combo_set_popdown_strings(GTK_COMBO(data), items);
+}
