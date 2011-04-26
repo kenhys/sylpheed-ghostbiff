@@ -17,7 +17,9 @@ if [ "$USE_AQUESTALK" -eq 1 ]; then
     LIB_AQUESTALK=" -lAquesTalk2 -lAquesTalk2Da -lAqKanji2Koe AquesTalk2Da.dll AqKanji2Koe.dll"
 fi
 
-if [ -z "$1" ]; then
+function build()
+{
+
     com="gcc -std=c99 -Wall -c $DEF $INC $NAME.c"
     echo $com
     eval $com
@@ -44,7 +46,7 @@ if [ -z "$1" ]; then
             eval $com
         fi
     fi
-fi
+}
 
 if [ ! -z "$1" ]; then
   case "$1" in
@@ -80,7 +82,13 @@ if [ ! -z "$1" ]; then
           #zip -r $PKG-$2.zip po/ghostbiff.mo
           zip -r $PKG-$2.zip *.xpm
           ;;
+      debug)
+          DEF="$DEF -DDEBUG"
+          build
+          ;;
   esac
   echo $com
   eval $com
+else
+    build
 fi

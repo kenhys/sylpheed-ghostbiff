@@ -36,6 +36,7 @@
 #include "procmime.h"
 #include "utils.h"
 #include "alertpanel.h"
+#include "foldersel.h"
 #include "prefs_common.h"
 #include "summaryview.h"
 #include "bell_add.xpm"
@@ -63,7 +64,7 @@
 #define GHOSTBIFF "ghostbiff"
 #define GHOSTBIFFRC "ghostbiffrc"
 
-#define PLUGIN_NAME N_("Ghostbiff mail biff Plug-in")
+#define PLUGIN_NAME N_("Ghostbiff - mail biff plug-in")
 #define PLUGIN_DESC N_("Simple biff plug-in for Sylpheed")
 
 static SylPluginInfo info = {
@@ -115,7 +116,11 @@ struct _GhostOption {
   GtkWidget *show_subject_btn;
   GtkWidget *show_content_btn;
   GtkWidget *input_entry;
-  
+
+#ifdef DEBUG
+  /* debug inbox folder */
+  GtkWidget *dfolder_entry;
+#endif
 };
 
 static gboolean g_enable = FALSE;
@@ -137,6 +142,11 @@ static void play_btn_clicked(GtkButton *button, gpointer data);
 static void aq_dic_btn_clicked(GtkButton *button, gpointer data);
 static void phont_btn_clicked(GtkButton *button, gpointer data);
 static void phont_file_set(GtkFileChooserButton *widget, gpointer data);
+
+#ifdef DEBUG
+static void debug_folder_btn_clicked(GtkButton *button, gpointer data);
+static void debug_play_btn_clicked(GtkButton *button, gpointer data);
+#endif
 
 static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey);
 static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey);
@@ -723,6 +733,28 @@ static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey)
   g_opt.chk_aquest = gtk_check_button_new_with_label(_("Enable AquesTalk2,AqKanji2Koe.[Experimental]"));
   gtk_box_pack_start(GTK_BOX(vbox), g_opt.chk_aquest, FALSE, FALSE, 0);
 
+#ifdef DEBUG
+  /* select folder and read random n mails test */
+  GtkWidget *folder_btn = gtk_button_new_from_stock(GTK_STOCK_OPEN);
+  g_opt.dfolder_entry = gtk_entry_new();
+  GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
+  gtk_box_pack_start(GTK_BOX(hbox), g_opt.dfolder_entry, TRUE, TRUE, 6);
+  gtk_box_pack_start(GTK_BOX(hbox), folder_btn, FALSE, FALSE, 6);
+  gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 6);
+
+  g_signal_connect(GTK_BUTTON(folder_btn), "clicked", G_CALLBACK(debug_folder_btn_clicked), g_opt.dfolder_entry);
+  
+  GtkWidget *spin_btn = gtk_spin_button_new_with_range(1, 10, 1);
+  GtkWidget *play_btn = gtk_button_new_from_stock("Play");
+  hbox = gtk_hbox_new(FALSE, 6);
+  gtk_box_pack_start(GTK_BOX(hbox), spin_btn, FALSE, FALSE, 6);
+  gtk_box_pack_start(GTK_BOX(hbox), play_btn, FALSE, FALSE, 6);
+  gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 6);
+
+  g_signal_connect(GTK_BUTTON(play_btn), "clicked", G_CALLBACK(debug_play_btn_clicked), spin_btn);
+
+#endif
+  
   GtkWidget *general_lbl = gtk_label_new(_("General"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), vbox, general_lbl);
   gtk_widget_show_all(notebook);
@@ -1086,4 +1118,52 @@ gpointer aquestalk_thread_func(gpointer data)
       g_mutex_unlock(g_mutex);
     }
   }
+}
+
+static FolderItem *d_folder = NULL;
+
+static void debug_folder_btn_clicked(GtkButton *button, gpointer data)
+{
+    d_folder = syl_plugin_folder_sel(NULL, FOLDER_SEL_COPY, NULL);
+    if (!d_folder || !d_folder->path){
+        return;
+    }
+    GtkWidget *widget = data;
+    gtk_entry_set_text(GTK_ENTRY(widget), d_folder->path);
+}
+
+static void debug_play_btn_clicked(GtkButton *button, gpointer data)
+{
+  debug_print("debug_play_btn_clicked\n");
+    gchar *inbox = gtk_entry_get_text(GTK_ENTRY(g_opt.dfolder_entry));
+
+    FolderItem *item = folder_find_item_from_identifier(inbox);
+    
+    GSList *msglist = folder_item_get_msg_list(item, TRUE);
+
+    int nlstlen = g_slist_length(msglist);
+
+    gint nnum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(data));
+    
+                                     /* pick up mail by random */
+    GRand *grnd = g_rand_new();
+    for (gint ncount = 0; ncount < nnum; ncount++){
+      gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
+      MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
+
+      debug_print("mutex_lock\n");
+
+      g_mutex_lock(g_mutex);
+      debug_print("append msginfo to list\n");
+      if (msginfo->file_path){
+        debug_print("msginfo file_path:%s\n", msginfo->file_path);
+      }
+      g_mails = g_list_append(g_mails, msginfo);
+      debug_print("after append stack:%d\n", g_list_length(g_mails));
+      g_cond_signal(g_cond);
+
+      g_mutex_unlock(g_mutex);
+      debug_print("mutex_unlock\n");
+      /*read_mail_by_aquestalk(msginfo);*/
+    }
 }
