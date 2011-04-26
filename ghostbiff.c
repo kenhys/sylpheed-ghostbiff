@@ -299,20 +299,23 @@ void plugin_load(void)
     }
 
     g_aqtkda = proc_aqda_create();
-}else{
+
+    GError *gerr=NULL;
+    g_thread_create(aquestalk_thread_func, g_mails, TRUE, &gerr);
+
+  }else{
     if (g_aquestalk2da == NULL){
       debug_print("LoadLibrary AquesTalk2Da.dll failed\n");
     }
     if (g_aqkanji2koe == NULL){
       debug_print("LoadLibrary AqKanji2Koe.dll failed\n");
     }
+    g_aquestalk_thread=FALSE;
   }
-
   g_cond = g_cond_new();
   g_mutex = g_mutex_new();
 
-  GError *gerr=NULL;
-  g_thread_create(aquestalk_thread_func, g_mails, TRUE, &gerr);
+
 }
 
 void plugin_unload(void)
@@ -486,13 +489,27 @@ static void exec_ghostbiff_menu_cb(void)
     buf = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont_path", NULL);
     if (buf != NULL){
       gtk_entry_set_text(GTK_ENTRY(g_opt.phont_entry), buf);
+
+      GDir* gdir = g_dir_open(buf, 0, NULL);
+      GList* items = NULL;
+      gchar *file =NULL;
+      do {
+          file = g_dir_read_name(gdir);
+          if (file!=NULL){
+              debug_print("%s\n", file);
+              items = g_list_append(items, g_strdup(file));
+          }
+      } while (file!=NULL);
+    
+      gtk_combo_set_popdown_strings(GTK_COMBO(g_opt.phont_cmb), items);
     }
 
     buf = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont", NULL);
     if (buf != NULL){
       gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(g_opt.phont_cmb)->entry), buf);
     }
-    /*    gchar *to=g_key_file_get_string (g_opt.rcfile, GHOSTBIFF, "to", NULL);
+
+   /*    gchar *to=g_key_file_get_string (g_opt.rcfile, GHOSTBIFF, "to", NULL);
     gtk_entry_set_text(GTK_ENTRY(g_address), to);
     */
   }
@@ -738,6 +755,7 @@ static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey)
   GtkWidget *folder_btn = gtk_button_new_from_stock(GTK_STOCK_OPEN);
   g_opt.dfolder_entry = gtk_entry_new();
   GtkWidget *hbox = gtk_hbox_new(FALSE, 6);
+  gtk_entry_set_text(GTK_ENTRY(g_opt.dfolder_entry), "inbox");
   gtk_box_pack_start(GTK_BOX(hbox), g_opt.dfolder_entry, TRUE, TRUE, 6);
   gtk_box_pack_start(GTK_BOX(hbox), folder_btn, FALSE, FALSE, 6);
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 6);
@@ -1135,7 +1153,12 @@ static void debug_folder_btn_clicked(GtkButton *button, gpointer data)
 static void debug_play_btn_clicked(GtkButton *button, gpointer data)
 {
   debug_print("debug_play_btn_clicked\n");
-    gchar *inbox = gtk_entry_get_text(GTK_ENTRY(g_opt.dfolder_entry));
+
+  if (g_aquestalk2da==NULL || g_aqkanji2koe==NULL){
+      return;
+  }
+  
+  gchar *inbox = gtk_entry_get_text(GTK_ENTRY(g_opt.dfolder_entry));
 
     FolderItem *item = folder_find_item_from_identifier(inbox);
     
@@ -1151,6 +1174,8 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
       gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
       MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
 
+      send_directsstp(msginfo);
+
       debug_print("mutex_lock\n");
 
       g_mutex_lock(g_mutex);
@@ -1158,6 +1183,9 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
       if (msginfo->file_path){
         debug_print("msginfo file_path:%s\n", msginfo->file_path);
       }
+      debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
+      debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
+
       g_mails = g_list_append(g_mails, msginfo);
       debug_print("after append stack:%d\n", g_list_length(g_mails));
       g_cond_signal(g_cond);
