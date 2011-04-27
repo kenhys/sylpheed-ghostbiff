@@ -563,8 +563,6 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
 
   MsgInfo *msginfo = folder_item_get_msginfo(item, num);
   
-  send_directsstp(msginfo);
-
   debug_print("mutex_lock\n");
   g_mutex_lock(g_mutex);
   debug_print("append msginfo to list\n");
@@ -1115,28 +1113,34 @@ gpointer aquestalk_thread_func(gpointer data)
       debug_print("signal in thread\n");
     } else {
       /* timeout */
-      debug_print("timeout in thread\n");
+      /*debug_print("timeout in thread\n");*/
     }
-    if (proc_aqda_isplay(g_aqtkda) != 0){
-      debug_print("now playing\n");
-    } else {
-      /* now play */
-      debug_print("ready to play\n");
-      g_mutex_lock(g_mutex);
-      if (g_mails!=NULL && g_list_length(g_mails) > 0){
-        MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
-        /*debug_print("nothing to play %s\n", msginfo->file_path);*/
-        debug_print("before play 0 stack:%d\n", g_list_length(g_mails));
-        read_mail_by_aquestalk(msginfo);
-        g_mails=g_list_remove(g_mails, msginfo);
-        debug_print("after play 0 stack:%d\n", g_list_length(g_mails));
-      }else {
-        debug_print("nothing to play\n");
+    if (proc_aqda_isplay!=NULL){
+      if (proc_aqda_isplay(g_aqtkda) != 0){
+        debug_print("now playing\n");
+      } else {
+        /* now play */
+        g_mutex_lock(g_mutex);
+        if (g_mails!=NULL && g_list_length(g_mails) > 0){
+          debug_print("ready to play\n");
+          MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
+          /*debug_print("nothing to play %s\n", msginfo->file_path);*/
+          debug_print("before play 0 stack:%d\n", g_list_length(g_mails));
+          read_mail_by_aquestalk(msginfo);
+          g_mails=g_list_remove(g_mails, msginfo);
+          debug_print("after play 0 stack:%d\n", g_list_length(g_mails));
+        }else {
+          debug_print("nothing to play\n");
+        }
+        g_mutex_unlock(g_mutex);
       }
-      g_mutex_unlock(g_mutex);
+    } else{
+      debug_print("missing AquesTalk2Da_IsPlay in thread\n");
     }
   }
 }
+
+#ifdef DEBUG
 
 static FolderItem *d_folder = NULL;
 
@@ -1155,6 +1159,7 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
   debug_print("debug_play_btn_clicked\n");
 
   if (g_aquestalk2da==NULL || g_aqkanji2koe==NULL){
+      debug_print("no aquestalk dll\n");
       return;
   }
   
@@ -1174,7 +1179,7 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
       gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
       MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
 
-      send_directsstp(msginfo);
+      /*send_directsstp(msginfo);*/
 
       debug_print("mutex_lock\n");
 
@@ -1195,3 +1200,4 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
       /*read_mail_by_aquestalk(msginfo);*/
     }
 }
+#endif
