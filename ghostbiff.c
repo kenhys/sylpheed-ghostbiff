@@ -28,6 +28,8 @@
 #include <gtk/gtk.h>
 
 #include <stdio.h>
+#include <ctype.h>
+#include <wctype.h>
 #include <sys/stat.h>
 
 #include "sylmain.h"
@@ -35,6 +37,7 @@
 #include "procmsg.h"
 #include "procmime.h"
 #include "utils.h"
+#include "unmime.h"
 #include "alertpanel.h"
 #include "foldersel.h"
 #include "prefs_common.h"
@@ -130,6 +133,10 @@ static HANDLE g_aqkanji2koe = NULL;
 static void *g_aqkanji = NULL;
 static H_AQTKDA g_aqtkda = NULL;
 static gchar *g_phont = NULL;
+/* hashtable for .phont path(key) and phont data */
+static GHashTable *g_phont_map = NULL;
+
+static MsgInfo *g_msginfo = NULL;
 
 static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num);
 static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers);
@@ -315,6 +322,8 @@ void plugin_load(void)
   g_cond = g_cond_new();
   g_mutex = g_mutex_new();
 
+  /* initialize .phont map. */
+  g_phont_map = g_hash_table_new(g_str_hash, g_str_equal);
 
 }
 
@@ -349,9 +358,9 @@ static void prefs_ok_cb(GtkWidget *widget, gpointer data)
   debug_print("aquest:%s\n", status ? "TRUE" : "FALSE");
 
 #if 0
-  gchar *buf = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
+  const gchar *buf = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
 #else
-  gchar *buf = gtk_entry_get_text(GTK_ENTRY(g_opt.aq_dic_entry));
+  const gchar *buf = gtk_entry_get_text(GTK_ENTRY(g_opt.aq_dic_entry));
 #endif
   debug_print("aq_dic:%s\n", buf);
   g_key_file_set_string (g_opt.rcfile, GHOSTBIFF, "aq_dic_path", buf);
@@ -492,13 +501,13 @@ static void exec_ghostbiff_menu_cb(void)
 
       GDir* gdir = g_dir_open(buf, 0, NULL);
       GList* items = NULL;
-      gchar *file =NULL;
+      const gchar *file =NULL;
       do {
-          file = g_dir_read_name(gdir);
-          if (file!=NULL){
-              debug_print("%s\n", file);
-              items = g_list_append(items, g_strdup(file));
-          }
+        file = g_dir_read_name(gdir);
+        if (file!=NULL){
+          debug_print("%s\n", file);
+          items = g_list_append(items, g_strdup(file));
+        }
       } while (file!=NULL);
     
       gtk_combo_set_popdown_strings(GTK_COMBO(g_opt.phont_cmb), items);
@@ -579,7 +588,7 @@ static void send_directsstp(MsgInfo *msginfo)
   HANDLE hMutex = CreateMutex(NULL,FALSE,L"SakuraFMO");
   if ( hMutex == NULL ) {
     g_print("No SakuraFMO\n");
-    return 0;
+    return;
   }
   if ( WaitForSingleObject(hMutex, 1000) != WAIT_TIMEOUT ) {
     g_print("SakuraFMO\n");
@@ -606,7 +615,7 @@ static void send_directsstp(MsgInfo *msginfo)
         unsigned char *p = (unsigned char*)lpMap;
         DWORD *lp = (DWORD*)lpMap;
         int nIndex = 0;
-        g_print("%p 0x%04x %ld\n", lp, lp[0], lp[0]);
+        g_print("%p 0x%04x %ld\n", lp, (unsigned int)lp[0], lp[0]);
         nIndex = 4;
         unsigned char kbuf[1024];
         unsigned char vbuf[1024];
@@ -622,9 +631,9 @@ static void send_directsstp(MsgInfo *msginfo)
             nkbuf=0;
             nvbuf=0;
             flg = 0;
-            if (strstr(kbuf, ".hwnd")!=NULL){
-              hwnd = (HANDLE)atoi(vbuf);
-              g_print("hwnd:%d\n", hwnd);
+            if (strstr((const char*)kbuf, ".hwnd")!=NULL){
+              hwnd = (HANDLE)atoi((const char*)vbuf);
+              g_print("hwnd:%d\n", (int)hwnd);
             }
           } else if (p[nIndex] == 0x01){
             g_print(" => ");
@@ -657,7 +666,7 @@ static void send_directsstp(MsgInfo *msginfo)
                               msginfo->date,
                               msginfo->from,
                               msginfo->to,
-                              unmime_header(msginfo->subject),hwnd);
+                              unmime_header(msginfo->subject),(int)hwnd);
         
         cds.dwData = 1;
         cds.cbData = strlen(msg);
@@ -698,7 +707,7 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     }
   }
   CodeConverter *cconv = conv_code_converter_new("UTF-8", "Shift_JIS");
-  gchar *text = unmime_header(msginfo->subject);
+  gchar *text = unmime_header((const gchar*)(msginfo->subject));
   gchar *sjis = conv_convert(cconv, text);
   char buf[1024];
   if (proc_aqkanji_convert==NULL){
@@ -708,17 +717,23 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
   if (proc_aqkanji_convert){
     proc_aqkanji_convert(g_aqkanji, sjis, buf, 1024);
   }
-  
-  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, "aq_rm.phont", NULL);
+
+  const gchar *phont_type = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(g_opt.phont_cmb)->entry));
+  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, phont_type, NULL);
   GError *perr = NULL;
   GMappedFile *gmap=NULL;
   g_print("%s\n", phont_path);
-  gmap = g_mapped_file_new(phont_path, FALSE, &perr);
-  if (gmap!=NULL){
-    g_phont = g_mapped_file_get_contents(gmap);
+  g_phont = g_hash_table_lookup(g_phont_map, phont_path);
+  if (g_phont != NULL){
+  } else {
+      gmap = g_mapped_file_new(phont_path, FALSE, &perr);
+      if (gmap!=NULL){
+          g_phont = g_mapped_file_get_contents(gmap);
+
+          g_hash_table_insert(g_phont_map, g_strdup(phont_path), gmap);
+      }
   }
   proc_aqda_play(g_aqtkda, buf, 100, g_phont, 0, 0, 0);
-
 }
 
 static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers)
@@ -727,7 +742,8 @@ static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean al
     g_print(msginfo->subject);
     g_print(msginfo->from);
     g_print(msginfo->to);
-    
+
+    g_msginfo = procmsg_msginfo_copy(msginfo);
 }
 
 /**/
@@ -967,16 +983,16 @@ static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey)
 static void play_btn_clicked(GtkButton *button, gpointer data)
 {
 #if 0
-  gchar *aq_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
+  const gchar *aq_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.aq_dic_btn));
 #else
-  gchar *aq_dic = gtk_entry_get_text(GTK_ENTRY(g_opt.aq_dic_entry));
+  const gchar *aq_dic = gtk_entry_get_text(GTK_ENTRY(g_opt.aq_dic_entry));
 #endif
   debug_print("aq_dic:%s\n", aq_dic);
 
 #if 0
-  gchar *phont_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.phont_btn));
+  const gchar *phont_dic = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(g_opt.phont_btn));
 #else
-  gchar *phont_dic = gtk_entry_get_text(GTK_ENTRY(g_opt.phont_entry));
+  const gchar *phont_dic = gtk_entry_get_text(GTK_ENTRY(g_opt.phont_entry));
 #endif
   debug_print("phont_btn:%s\n", phont_dic);
 
@@ -994,7 +1010,7 @@ static void play_btn_clicked(GtkButton *button, gpointer data)
   }
 
   CodeConverter *cconv = conv_code_converter_new("UTF-8", "Shift_JIS");
-  gchar *text = gtk_entry_get_text(GTK_ENTRY(g_opt.input_entry));
+  const gchar *text = gtk_entry_get_text(GTK_ENTRY(g_opt.input_entry));
   gchar *sjis = conv_convert(cconv, text);
   char buf[1024];
 
@@ -1004,18 +1020,24 @@ static void play_btn_clicked(GtkButton *button, gpointer data)
   }
   proc_aqkanji_convert(aq, sjis, buf, 1024);
   
-  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, "aq_rm.phont", NULL);
+  const gchar *phont_type = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(g_opt.phont_cmb)->entry));
+  gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, phont_type, NULL);
   GError *perr = NULL;
   GMappedFile *gmap=NULL;
-  g_print("%s\n", phont_path);
-  gmap = g_mapped_file_new(phont_path, FALSE, &perr);
-  if (gmap!=NULL){
-    gchar *pc = g_mapped_file_get_contents(gmap);
 
-    proc_aqda_playsync(buf, 100, pc);
+  g_phont = g_hash_table_lookup(g_phont_map, g_strdup(phont_path));
 
-    g_mapped_file_free(gmap);
+  if (g_phont!=NULL){
+  } else {
+    g_print("%s\n", phont_path);
+    gmap = g_mapped_file_new(phont_path, FALSE, &perr);
+    if (gmap!=NULL){
+      g_phont = g_mapped_file_get_contents(gmap);
+      g_hash_table_insert(g_phont_map, g_strdup(phont_path), g_phont);
+    }
   }
+
+  proc_aqda_playsync(buf, 100, g_phont);
 
   if (proc_aqkanji_release==NULL){
     debug_print("AqKanji2Koe_Release symbol not found\n");
@@ -1028,18 +1050,19 @@ static void play_btn_clicked(GtkButton *button, gpointer data)
 /* GTK 2.12 or later */
 static void phont_file_set(GtkFileChooserButton *widget, gpointer data)
 {
-    debug_print("phont_file_set called.");
-    gchar *phont_dir = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(widget));
-    /* use GIO *.phont */
-    GList* items = NULL;
+  debug_print("phont_file_set called.");
+#if 0
+  gchar *phont_dir = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(widget));
+  /* use GIO *.phont */
+  GList* items = NULL;
 
-    items = g_list_append(items, "test");
-    gtk_combo_set_popdown_strings(GTK_COMBO(data), items);
+  items = g_list_append(items, "test");
+  gtk_combo_set_popdown_strings(GTK_COMBO(data), items);
+#endif
 }
 
 static void aq_dic_btn_clicked(GtkButton *button, gpointer data)
 {
-  GtkWidget *entry = data;
   GtkWidget *dialog = gtk_file_chooser_dialog_new(NULL, NULL, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                                   GTK_STOCK_OPEN,GTK_RESPONSE_ACCEPT,
                                                   GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
@@ -1052,9 +1075,9 @@ static void aq_dic_btn_clicked(GtkButton *button, gpointer data)
   }
   gtk_widget_destroy (dialog);
 }
+
 static void phont_btn_clicked(GtkButton *button, gpointer data)
 {
-  GtkWidget *entry = data;
   GtkWidget *dialog = gtk_file_chooser_dialog_new(NULL, NULL, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                                   GTK_STOCK_OPEN,GTK_RESPONSE_ACCEPT,
                                                   GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
@@ -1082,7 +1105,7 @@ static void phont_btn_clicked(GtkButton *button, gpointer data)
 #else
     GDir* gdir = g_dir_open(filename, 0, NULL);
     GList* items = NULL;
-    gchar *file =NULL;
+    const gchar *file =NULL;
     do {
       file = g_dir_read_name(gdir);
       if (file!=NULL){
@@ -1138,6 +1161,7 @@ gpointer aquestalk_thread_func(gpointer data)
       debug_print("missing AquesTalk2Da_IsPlay in thread\n");
     }
   }
+  return NULL;
 }
 
 #ifdef DEBUG
@@ -1163,41 +1187,41 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
       return;
   }
   
-  gchar *inbox = gtk_entry_get_text(GTK_ENTRY(g_opt.dfolder_entry));
+  const gchar *inbox = gtk_entry_get_text(GTK_ENTRY(g_opt.dfolder_entry));
 
-    FolderItem *item = folder_find_item_from_identifier(inbox);
+  FolderItem *item = folder_find_item_from_identifier(inbox);
     
-    GSList *msglist = folder_item_get_msg_list(item, TRUE);
+  GSList *msglist = folder_item_get_msg_list(item, TRUE);
 
-    int nlstlen = g_slist_length(msglist);
+  int nlstlen = g_slist_length(msglist);
 
-    gint nnum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(data));
+  gint nnum = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(data));
     
-                                     /* pick up mail by random */
-    GRand *grnd = g_rand_new();
-    for (gint ncount = 0; ncount < nnum; ncount++){
-      gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
-      MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
+  /* pick up mail by random */
+  GRand *grnd = g_rand_new();
+  for (gint ncount = 0; ncount < nnum; ncount++){
+    gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
+    MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
 
-      /*send_directsstp(msginfo);*/
+    /*send_directsstp(msginfo);*/
 
-      debug_print("mutex_lock\n");
+    debug_print("mutex_lock\n");
 
-      g_mutex_lock(g_mutex);
-      debug_print("append msginfo to list\n");
-      if (msginfo->file_path){
-        debug_print("msginfo file_path:%s\n", msginfo->file_path);
-      }
-      debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
-      debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
-
-      g_mails = g_list_append(g_mails, msginfo);
-      debug_print("after append stack:%d\n", g_list_length(g_mails));
-      g_cond_signal(g_cond);
-
-      g_mutex_unlock(g_mutex);
-      debug_print("mutex_unlock\n");
-      /*read_mail_by_aquestalk(msginfo);*/
+    g_mutex_lock(g_mutex);
+    debug_print("append msginfo to list\n");
+    if (msginfo->file_path){
+      debug_print("msginfo file_path:%s\n", msginfo->file_path);
     }
+    debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
+    debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
+
+    g_mails = g_list_append(g_mails, msginfo);
+    debug_print("after append stack:%d\n", g_list_length(g_mails));
+    g_cond_signal(g_cond);
+
+    g_mutex_unlock(g_mutex);
+    debug_print("mutex_unlock\n");
+    /*read_mail_by_aquestalk(msginfo);*/
+  }
 }
 #endif
