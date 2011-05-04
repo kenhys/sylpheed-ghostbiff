@@ -84,7 +84,8 @@ if [ ! -z "$1" ]; then
           zip $PKG-$2.zip $TARGET
           zip -r $PKG-$2.zip README.ja.txt
           #zip -r $PKG-$2.zip ghostbiff.c
-          #zip -r $PKG-$2.zip po/ghostbiff.mo
+          zip -r $PKG-$2.zip po/ghostbiff.mo
+          zip -r $PKG-$2.zip ChangeLog
           zip -r $PKG-$2.zip *.xpm
           ;;
       debug)
