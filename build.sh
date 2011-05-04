@@ -11,6 +11,7 @@ INC=" -I. -I../../ -I../../libsylph -I../../src `pkg-config --cflags glib-2.0 ca
 
 USE_AQUESTALK=1
 DEF=" -DHAVE_CONFIG_H -DUNICODE -D_UNICODE "
+DEBUG=0
 LIB_AQUESTALK=""
 if [ "$USE_AQUESTALK" -eq 1 ]; then
     DEF="$DEF -DUSE_AQUESTALK -DMULTI_STR_CODE"
@@ -20,7 +21,11 @@ fi
 function build()
 {
 
-    com="gcc -std=c99 -Wall -c $DEF $INC $NAME.c"
+    if [ $DEBUG -eq 1 ]; then
+        com="gcc -std=c99 -Wall -g -c $DEF $INC $NAME.c"
+    else
+        com="gcc -std=c99 -Wall -c $DEF $INC $NAME.c"
+    fi
     echo $com
     eval $com
     if [ $? != 0 ]; then
@@ -83,6 +88,7 @@ if [ ! -z "$1" ]; then
           zip -r $PKG-$2.zip *.xpm
           ;;
       debug)
+          DEBUG=1
           DEF="$DEF -DDEBUG"
           build
           ;;

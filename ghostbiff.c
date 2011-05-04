@@ -155,6 +155,16 @@ static void debug_folder_btn_clicked(GtkButton *button, gpointer data);
 static void debug_play_btn_clicked(GtkButton *button, gpointer data);
 #endif
 
+static void summaryview_menu_popup_cb(GObject *obj, GtkItemFactory *ifactory,
+				      gpointer data);
+
+static void menu_selected_cb(void);
+static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
+				   GtkTextView *textview,
+				   const gchar *uri,
+				   const gchar *selected_text,
+				   MsgInfo *msginfo);
+
 static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey);
 static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey);
 static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey);
@@ -218,6 +228,11 @@ void plugin_load(void)
 
   syl_plugin_signal_connect("messageview-show", G_CALLBACK(exec_messageview_show_cb), NULL);
 
+  syl_plugin_signal_connect("summaryview-menu-popup",
+				  G_CALLBACK(summaryview_menu_popup_cb), NULL);
+  syl_plugin_signal_connect("textview-menu-popup",
+				  G_CALLBACK(textview_menu_popup_cb), NULL);
+  
   GtkWidget *mainwin = syl_plugin_main_window_get();
   GtkWidget *statusbar = syl_plugin_main_window_get_statusbar();
   GtkWidget *plugin_box = gtk_hbox_new(FALSE, 0);
@@ -324,6 +339,10 @@ void plugin_load(void)
 
   /* initialize .phont map. */
   g_phont_map = g_hash_table_new(g_str_hash, g_str_equal);
+
+  syl_plugin_add_factory_item("<SummaryView>", "/---", NULL, NULL);
+  syl_plugin_add_factory_item("<SummaryView>", "/Text To Speech [ghostbiff]",
+                              menu_selected_cb, NULL);
 
 }
 
@@ -687,6 +706,8 @@ static void send_directsstp(MsgInfo *msginfo)
 
 static void read_mail_by_aquestalk(MsgInfo *msginfo)
 {
+  debug_print("read_mail_by_aquestalk called.\n");
+
   gchar *aq_dic = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "aq_dic_path", NULL);
   debug_print("aq_dic:%s\n", aq_dic);
 
@@ -717,8 +738,13 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
   if (proc_aqkanji_convert){
     proc_aqkanji_convert(g_aqkanji, sjis, buf, 1024);
   }
-
-  const gchar *phont_type = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(g_opt.phont_cmb)->entry));
+#ifdef DEBUG
+  g_print("text:%s\n", text);
+  g_print("sjis:%s\n", sjis);
+  g_print("koe:%s\n", buf);
+#endif
+  
+  const gchar *phont_type = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont", NULL);
   gchar *phont_path = g_strconcat(phont_dic, G_DIR_SEPARATOR_S, phont_type, NULL);
   GError *perr = NULL;
   GMappedFile *gmap=NULL;
@@ -733,7 +759,10 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
           g_hash_table_insert(g_phont_map, g_strdup(phont_path), gmap);
       }
   }
-  proc_aqda_play(g_aqtkda, buf, 100, g_phont, 0, 0, 0);
+  int nResult = proc_aqda_play(g_aqtkda, buf, 100, NULL/*g_phont*/, NULL, 0, 0);
+  if (nResult != 0){
+    g_print("AquesTalk2Da_Play:%d\n", nResult);
+  }
 }
 
 static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers)
@@ -889,6 +918,8 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   if (status!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn), TRUE);
   }
+  /* disable body */
+  gtk_widget_set_sensitive(GTK_WIDGET(g_opt.new_content_btn), FALSE);
     
   /* talk setting when you preview each mail.
      subject,body check button */
@@ -912,6 +943,9 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   if (status!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn), TRUE);
   }
+  /* disable for message-view signal */
+  gtk_widget_set_sensitive(GTK_WIDGET(g_opt.show_subject_btn), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_opt.show_content_btn), FALSE);
     
 
   /* input sample text */
@@ -1036,6 +1070,11 @@ static void play_btn_clicked(GtkButton *button, gpointer data)
       g_hash_table_insert(g_phont_map, g_strdup(phont_path), g_phont);
     }
   }
+#ifdef DEBUG
+  printf("text:%s\n", text);
+  printf("sjis:%s\n", sjis);
+  printf("koe:%s\n", buf);
+#endif
 
   proc_aqda_playsync(buf, 100, g_phont);
 
@@ -1148,10 +1187,10 @@ gpointer aquestalk_thread_func(gpointer data)
           debug_print("ready to play\n");
           MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
           /*debug_print("nothing to play %s\n", msginfo->file_path);*/
-          debug_print("before play 0 stack:%d\n", g_list_length(g_mails));
+          debug_print("thread before play 0 stack:%d\n", g_list_length(g_mails));
           read_mail_by_aquestalk(msginfo);
           g_mails=g_list_remove(g_mails, msginfo);
-          debug_print("after play 0 stack:%d\n", g_list_length(g_mails));
+          debug_print("thread after play 0 stack:%d\n", g_list_length(g_mails));
         }else {
           debug_print("nothing to play\n");
         }
@@ -1162,6 +1201,73 @@ gpointer aquestalk_thread_func(gpointer data)
     }
   }
   return NULL;
+}
+
+static void summaryview_menu_popup_cb(GObject *obj, GtkItemFactory *ifactory,
+				      gpointer data)
+{
+  GtkWidget *widget;
+
+  g_print("test: %p: summaryview menu popup\n", obj);
+  widget = gtk_item_factory_get_item(ifactory, "/Text To Speech [ghostbiff]");
+  if (widget){
+    gtk_widget_set_sensitive(widget, TRUE);
+  }
+}
+
+static void activate_menu_cb(GtkMenuItem *menuitem, gpointer data)
+{
+  g_print("menu activated\n");
+}
+
+static void menu_selected_cb(void)
+{
+	gint sel;
+	GSList *mlist;
+
+	g_print("test: summary menu selected\n");
+	sel = syl_plugin_summary_get_selection_type();
+	mlist = syl_plugin_summary_get_selected_msg_list();
+	g_print("test: selection type: %d\n", sel);
+	g_print("test: number of selected summary message: %d\n",
+            g_slist_length(mlist));
+
+    g_mutex_lock(g_mutex);
+    for (int nindex=0; nindex < g_slist_length(mlist); nindex++){
+      MsgInfo *msginfo = g_slist_nth_data(mlist, nindex);
+      g_print("menu from: %s\n", msginfo->from);
+      g_print("menu to: %s\n", msginfo->to);
+      g_print("menu subject: %s\n", msginfo->subject);
+      g_print("menu date: %s\n", msginfo->date);
+      g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
+    }
+    g_cond_signal(g_cond);
+    g_mutex_unlock(g_mutex);
+	g_slist_free(mlist);
+}
+
+static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
+				   GtkTextView *textview,
+				   const gchar *uri,
+                                   const gchar *selected_text,
+                                   MsgInfo *msginfo)
+{
+  GtkWidget *separator, *menuitem;
+
+  g_print("test: %p: textview menu popup\n", obj);
+  g_print("test: %p: uri: %s, text: %s\n", obj, uri ? uri : "(none)",
+          selected_text ? selected_text : "(none)");
+  g_print("test: %p: msg: %s\n", obj,
+          msginfo && msginfo->subject ? msginfo->subject : "");
+
+  separator = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
+  gtk_widget_show(separator);
+
+  menuitem = gtk_menu_item_new_with_mnemonic("Test menu");
+  g_signal_connect(menuitem, "activate", G_CALLBACK(activate_menu_cb), NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem);
+  gtk_widget_show(menuitem);
 }
 
 #ifdef DEBUG
