@@ -137,6 +137,7 @@ static gchar *g_phont = NULL;
 static GHashTable *g_phont_map = NULL;
 
 static MsgInfo *g_msginfo = NULL;
+static GThread *g_thread = NULL;
 
 static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num);
 static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers);
@@ -323,7 +324,7 @@ void plugin_load(void)
     g_aqtkda = proc_aqda_create();
 
     GError *gerr=NULL;
-    g_thread_create(aquestalk_thread_func, g_mails, TRUE, &gerr);
+    g_thread = g_thread_create(aquestalk_thread_func, g_mails, TRUE, &gerr);
 
   }else{
     if (g_aquestalk2da == NULL){
@@ -336,7 +337,7 @@ void plugin_load(void)
   }
   g_cond = g_cond_new();
   g_mutex = g_mutex_new();
-
+  
   /* initialize .phont map. */
   g_phont_map = g_hash_table_new(g_str_hash, g_str_equal);
 
@@ -348,13 +349,30 @@ void plugin_load(void)
 
 void plugin_unload(void)
 {
+  g_print("[DEBUG] plugin_unload called.\n");
   g_free(g_opt.rcpath);
 
+  g_print("[DEBUG] g_aquestalk_thread to FALSE\n");
   g_aquestalk_thread=FALSE;
+
+#if 0
+  if (g_thread!=NULL){
+    g_print("[DEBUG] waiting g_thread_join\n");
+    g_thread_join(g_thread);
+  }
+#endif
+  
+  g_print("[DEBUG] plugin_unload done.\n");
 }
 
 SylPluginInfo *plugin_info(void)
 {
+  g_print("&info:%p\n", &info);
+  g_print("sizeof info:%d\n", sizeof(SylPluginInfo));
+  g_print("name:%p\n", &info.name);
+  g_print("version:%p\n", &info.version);
+  g_print("author:%p\n", &info.author);
+  g_print("description:%p\n", &info.description);
   return &info;
 }
 
@@ -1071,9 +1089,9 @@ static void play_btn_clicked(GtkButton *button, gpointer data)
     }
   }
 #ifdef DEBUG
-  printf("text:%s\n", text);
-  printf("sjis:%s\n", sjis);
-  printf("koe:%s\n", buf);
+  g_print("text:%s\n", text);
+  g_print("sjis:%s\n", sjis);
+  g_print("koe:%s\n", buf);
 #endif
 
   proc_aqda_playsync(buf, 100, g_phont);
@@ -1163,43 +1181,56 @@ static void phont_btn_clicked(GtkButton *button, gpointer data)
 
 gpointer aquestalk_thread_func(gpointer data)
 {
-  debug_print("aquestalk_thread_func called.\n");
+  g_print("[DEBUG] aquestalk_thread_func called.\n");
+  g_print("[DEBUG] g_aquestalk_thread %d\n", g_aquestalk_thread);
   GTimeVal tval;
-  while(g_aquestalk_thread){
+  gboolean bloop = TRUE;
+  while(bloop){
+
+    g_mutex_lock(g_mutex);
+    g_print("[DEBUG] check bloop.\n");
+    if (g_aquestalk_thread!=TRUE){
+      g_print("[DEBUG] bloop to FALSE\n");
+      bloop = FALSE;
+    }
+    g_print("[DEBUG] check bloop end.\n");
+    g_mutex_unlock(g_mutex);
+
     g_get_current_time(&tval);
     /* per 10 second, */
     g_time_val_add(&tval, G_USEC_PER_SEC * 5);
     gboolean ret = g_cond_timed_wait(g_cond, g_mutex, &tval);
     if (ret != FALSE){
       /* signal */
-      debug_print("signal in thread\n");
+      g_print("signal in thread\n");
     } else {
       /* timeout */
       /*debug_print("timeout in thread\n");*/
     }
     if (proc_aqda_isplay!=NULL){
       if (proc_aqda_isplay(g_aqtkda) != 0){
-        debug_print("now playing\n");
+        g_print("[DEBUG] now playing\n");
       } else {
         /* now play */
         g_mutex_lock(g_mutex);
         if (g_mails!=NULL && g_list_length(g_mails) > 0){
-          debug_print("ready to play\n");
+          g_print("[DEBUG] ready to play\n");
           MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
           /*debug_print("nothing to play %s\n", msginfo->file_path);*/
-          debug_print("thread before play 0 stack:%d\n", g_list_length(g_mails));
+          g_print("[DEBUG] thread before play 0 stack:%d\n", g_list_length(g_mails));
           read_mail_by_aquestalk(msginfo);
           g_mails=g_list_remove(g_mails, msginfo);
-          debug_print("thread after play 0 stack:%d\n", g_list_length(g_mails));
+          g_print("[DEBUG] thread after play 0 stack:%d\n", g_list_length(g_mails));
         }else {
-          debug_print("nothing to play\n");
+          g_print("[DEBUG] nothing to play\n");
         }
         g_mutex_unlock(g_mutex);
       }
     } else{
-      debug_print("missing AquesTalk2Da_IsPlay in thread\n");
+      g_print("[DEBUG] missing AquesTalk2Da_IsPlay in thread\n");
     }
   }
+  g_print("[DEBUG] aquestalk_thread_func end.\n");
   return NULL;
 }
 
@@ -1233,7 +1264,8 @@ static void menu_selected_cb(void)
             g_slist_length(mlist));
 
     g_mutex_lock(g_mutex);
-    for (int nindex=0; nindex < g_slist_length(mlist); nindex++){
+    int nindex=0;
+    for (nindex=0; nindex < g_slist_length(mlist); nindex++){
       MsgInfo *msginfo = g_slist_nth_data(mlist, nindex);
       g_print("menu from: %s\n", msginfo->from);
       g_print("menu to: %s\n", msginfo->to);
@@ -1321,7 +1353,7 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
     debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
     debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
 
-    g_mails = g_list_append(g_mails, msginfo);
+    g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
     debug_print("after append stack:%d\n", g_list_length(g_mails));
     g_cond_signal(g_cond);
 
