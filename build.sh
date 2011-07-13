@@ -91,6 +91,12 @@ else
                 eval $com
                 shift
                 ;;
+            res)
+                com="windres -i version.rc -o version.o"
+                echo $com
+                eval $com
+                shift
+                ;;
             -r|release)
                 shift
                 if [ ! -z "$1" ]; then
