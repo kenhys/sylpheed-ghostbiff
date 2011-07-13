@@ -32,43 +32,7 @@
 #include <wctype.h>
 #include <sys/stat.h>
 
-#include "sylmain.h"
-#include "plugin.h"
-#include "procmsg.h"
-#include "procmime.h"
-#include "utils.h"
-#include "unmime.h"
-#include "alertpanel.h"
-#include "foldersel.h"
-#include "prefs_common.h"
-#include "summaryview.h"
-#include "bell_add.xpm"
-#include "bell_delete.xpm"
-
-#ifdef USE_AQUESTALK
-#ifdef __MINGW32__
-#define AqKanji2Koe_Create _AqKanji2Koe_Create
-#define AqKanji2Koe_Convert _AqKanji2Koe_Convert
-#define AqKanji2Koe_Release _AqKanji2Koe_Release
-#endif
-#include "AqKanji2Koe.h"
-#include "AquesTalk2Da.h"
-#endif
-
-#include <glib.h>
-#include <glib/gi18n-lib.h>
-#include <locale.h>
-
-
-#define _(String) dgettext("ghostbiff", String)
-#define N_(String) gettext_noop(String)
-#define gettext_noop(String) (String)
-
-#define GHOSTBIFF "ghostbiff"
-#define GHOSTBIFFRC "ghostbiffrc"
-
-#define PLUGIN_NAME N_("Ghostbiff - mail biff plug-in")
-#define PLUGIN_DESC N_("Simple biff plug-in for Sylpheed")
+#include "ghostbiff.h"
 
 static SylPluginInfo info = {
   N_(PLUGIN_NAME),
@@ -92,39 +56,6 @@ static gchar* g_copyright = N_("Ghostbiff is distributed under GPL license.\n"
 "ghostbiff was tested by evaluation edition, \n"
 "so it may not work in official release.");
 
-typedef struct _GhostOption GhostOption;
-
-struct _GhostOption {
-  /* General section */
-
-  /* full path to ghostbiffrc*/
-  gchar *rcpath;
-  /* rcfile */
-  GKeyFile *rcfile;
-
-  /* startup check in general */
-  GtkWidget *chk_startup;
-  /* aquestalk check in general */
-  GtkWidget *chk_aquest;
-
-  gboolean enable_aquest;
-
-  GtkWidget *aq_dic_entry;
-  GtkWidget *aq_dic_btn;
-  GtkWidget *phont_entry;
-  GtkWidget *phont_btn;
-  GtkWidget *phont_cmb;
-  GtkWidget *new_subject_btn;
-  GtkWidget *new_content_btn;
-  GtkWidget *show_subject_btn;
-  GtkWidget *show_content_btn;
-  GtkWidget *input_entry;
-
-#ifdef DEBUG
-  /* debug inbox folder */
-  GtkWidget *dfolder_entry;
-#endif
-};
 
 static gboolean g_enable = FALSE;
 static GhostOption g_opt;
@@ -139,59 +70,6 @@ static GHashTable *g_phont_map = NULL;
 static MsgInfo *g_msginfo = NULL;
 static GThread *g_thread = NULL;
 
-static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num);
-static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers);
-static void exec_ghostbiff_menu_cb(void);
-static void exec_ghostbiff_onoff_cb(void);
-static void send_directsstp(MsgInfo *msginfo);
-static void read_mail_by_aquestalk(MsgInfo *msginfo);
-
-static void play_btn_clicked(GtkButton *button, gpointer data);
-static void aq_dic_btn_clicked(GtkButton *button, gpointer data);
-static void phont_btn_clicked(GtkButton *button, gpointer data);
-static void phont_file_set(GtkFileChooserButton *widget, gpointer data);
-
-#ifdef DEBUG
-static void debug_folder_btn_clicked(GtkButton *button, gpointer data);
-static void debug_play_btn_clicked(GtkButton *button, gpointer data);
-#endif
-
-static void summaryview_menu_popup_cb(GObject *obj, GtkItemFactory *ifactory,
-				      gpointer data);
-
-static void menu_selected_cb(void);
-static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
-				   GtkTextView *textview,
-				   const gchar *uri,
-				   const gchar *selected_text,
-				   MsgInfo *msginfo);
-
-static GtkWidget *create_config_main_page(GtkWidget *notebook, GKeyFile *pkey);
-static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey);
-static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey);
-
-static gpointer aquestalk_thread_func(gpointer data);
-
-#if USE_AQUESTALK
-typedef int __stdcall (*AQUESTALK2DA_PLAYSYNC)(const char *koe, int iSpeed, void *phontDat);
-typedef int __stdcall (*AQUESTALK2DA_PLAY)(H_AQTKDA hMe, const char *koe, int iSpeed, void *phontDat, HWND hWnd, unsigned long msg, unsigned long dwUser);
-typedef void __stdcall (*AQUESTALK2DA_STOP)(H_AQTKDA hMe);
-typedef int __stdcall (*AQUESTALK2DA_ISPLAY)(H_AQTKDA hMe);
-typedef H_AQTKDA __stdcall (*AQUESTALK2DA_CREATE)();
-typedef void __stdcall (*AQUESTALK2DA_RELEASE)(H_AQTKDA hMe);
-typedef void * __stdcall (*AQKANJI2KOE_CREATE)(const char *pathDic, int *pErr);
-typedef void  __stdcall (*AQKANJI2KOE_RELEASE)(void *hAqKanji2Koe);
-typedef int __stdcall (*AQKANJI2KOE_CONVERT)(void *hAqKanji2Koe, const char *kanji, char *koe, int nBufKoe);
-AQKANJI2KOE_CREATE proc_aqkanji_create;
-AQKANJI2KOE_RELEASE proc_aqkanji_release;
-AQKANJI2KOE_CONVERT proc_aqkanji_convert;
-AQUESTALK2DA_CREATE proc_aqda_create;
-AQUESTALK2DA_RELEASE proc_aqda_release;
-AQUESTALK2DA_PLAYSYNC proc_aqda_playsync;
-AQUESTALK2DA_PLAY proc_aqda_play;
-AQUESTALK2DA_STOP proc_aqda_stop;
-AQUESTALK2DA_ISPLAY proc_aqda_isplay;
-#endif
 
 static GtkWidget *g_plugin_on = NULL;
 static GtkWidget *g_plugin_off = NULL;
@@ -203,17 +81,6 @@ static GMutex *g_mutex=NULL;
 static GList *g_mails=NULL;
 static gboolean g_aquestalk_thread = TRUE;
 
-#if 0
-static gboolean summary_select_func	(GtkTreeSelection	*treeview,
-					 GtkTreeModel		*model,
-					 GtkTreePath		*path,
-					 gboolean		 cur_selected,
-					 gpointer		 data);
-
-static gboolean summary_key_pressed	(GtkWidget		*treeview,
-					 GdkEventKey		*event,
-					 SummaryView		*summaryview);
-#endif
 
 void plugin_load(void)
 {
@@ -267,7 +134,7 @@ void plugin_load(void)
   g_opt.rcpath = g_strconcat(get_rc_dir(), G_DIR_SEPARATOR_S, GHOSTBIFFRC, NULL);
   g_opt.rcfile = g_key_file_new();
   if (g_key_file_load_from_file(g_opt.rcfile, g_opt.rcpath, G_KEY_FILE_KEEP_COMMENTS, NULL)){
-    gboolean startup=g_key_file_get_boolean (g_opt.rcfile, GHOSTBIFF, "startup", NULL);
+    gboolean startup = GET_RC_BOOLEAN("startup");
     debug_print("startup:%s", startup ? "true" : "false");
     if (startup){
       g_enable=TRUE;
@@ -420,21 +287,21 @@ static void prefs_ok_cb(GtkWidget *widget, gpointer data)
   buf = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(g_opt.phont_cmb)->entry));
   g_key_file_set_string (g_opt.rcfile, GHOSTBIFF, "phont", buf);
 
-  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_subject_btn));
-  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "new_subject", status);
-  debug_print("new_subject:%s\n", status ? "TRUE" : "FALSE");
+  g_opt.flg_new_subject = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_subject_btn));
+  SET_RC_BOOLEAN("new_subject", g_opt.flg_new_subject);
+  debug_print("new_subject:%s\n", g_opt.flg_new_subject ? "TRUE" : "FALSE");
 
-  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn));
-  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "new_content", status);
-  debug_print("new_content:%s\n", status ? "TRUE" : "FALSE");
+  g_opt.flg_new_content = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn));
+  SET_RC_BOOLEAN( "new_content", g_opt.flg_new_content);
+  debug_print("new_content:%s\n", g_opt.flg_new_content ? "TRUE" : "FALSE");
 
-  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_subject_btn));
-  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "show_subject", status);
-  debug_print("show_subject:%s\n", status ? "TRUE" : "FALSE");
+  g_opt.flg_show_subject = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_subject_btn));
+  SET_RC_BOOLEAN("show_subject", g_opt.flg_show_subject);
+  debug_print("show_subject:%s\n", g_opt.flg_show_subject ? "TRUE" : "FALSE");
 
-  status = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn));
-  g_key_file_set_boolean (g_opt.rcfile, GHOSTBIFF, "show_content", status);
-  debug_print("show_content:%s\n", status ? "TRUE" : "FALSE");
+  g_opt.flg_show_content = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn));
+  SET_RC_BOOLEAN("show_content", g_opt.flg_show_content);
+  debug_print("show_content:%s\n", g_opt.flg_show_content ? "TRUE" : "FALSE");
 
   /**/
   gsize sz;
@@ -596,7 +463,7 @@ static void exec_ghostbiff_onoff_cb(void)
   }
 }
 
-void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num)
+static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint num)
 {
   debug_print("exec_ghostbiff_cb called.\n");
   if (g_enable!=TRUE){
@@ -624,7 +491,6 @@ void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file, guint 
   g_cond_signal(g_cond);
   g_mutex_unlock(g_mutex);
   debug_print("mutex_unlock\n");
-  /*read_mail_by_aquestalk(msginfo);*/
 }
 
 static void send_directsstp(MsgInfo *msginfo)
@@ -790,14 +656,31 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
   }
 }
 
-static void exec_messageview_show_cb(GObject *obj, MsgInfo *msginfo, gboolean all_headers)
+static void exec_messageview_show_cb(GObject *obj, gpointer msgview,
+                                     MsgInfo *msginfo, gboolean all_headers)
 {
-    g_print("ghostbiff messageview-show\n");
-    g_print(msginfo->subject);
-    g_print(msginfo->from);
-    g_print(msginfo->to);
+  g_print("[PLUGIN] messageview-show\n");
+  g_print(msginfo->subject);
+  g_print(msginfo->from);
+  g_print(msginfo->to);
+  g_print("test: %p: messageview_show (%p), all_headers: %d: %s\n",
+          obj, msgview, all_headers,
+          msginfo && msginfo->subject ? msginfo->subject : "");
 
-    g_msginfo = procmsg_msginfo_copy(msginfo);
+  GtkWidget* text = ((MessageView*)msgview)->textview->text;
+
+  /*MsgInfo* msg = procmsg_msginfo_copy(msginfo);*/
+
+  debug_print("mutex_lock\n");
+  g_mutex_lock(g_mutex);
+  debug_print("append msginfo to list\n");
+  g_mails = g_list_append(g_mails, msginfo);
+  debug_print("after append stack:%d\n", g_list_length(g_mails));
+  g_cond_signal(g_cond);
+  g_mutex_unlock(g_mutex);
+  debug_print("mutex_unlock\n");
+  /*read_mail_by_aquestalk(msginfo);*/
+    
 }
 
 /**/
@@ -935,17 +818,20 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   gtk_container_add(GTK_CONTAINER(new_frm_align), new_frm);
   gtk_widget_show_all(new_frm_align);
 
-  gboolean status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "new_subject", NULL);
-  if (status!=FALSE){
+  g_opt.flg_new_subject = GET_RC_BOOLEAN("new_subject");
+  if (g_opt.flg_new_subject!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.new_subject_btn), TRUE);
   }
-  status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "new_content", NULL);
-  if (status!=FALSE){
+
+  g_opt.flg_new_content = GET_RC_BOOLEAN("new_content");
+  if (g_opt.flg_new_content!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.new_content_btn), TRUE);
   }
   /* disable body */
+#if 0
   gtk_widget_set_sensitive(GTK_WIDGET(g_opt.new_content_btn), FALSE);
-    
+#endif
+  
   /* talk setting when you preview each mail.
      subject,body check button */
   GtkWidget *preview_frm = gtk_frame_new(_("Read what when you preview mail"));
@@ -960,18 +846,20 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   gtk_container_add(GTK_CONTAINER(pv_frm_align), preview_frm);
   gtk_widget_show_all(pv_frm_align);
 
-  status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "show_subject", NULL);
-  if (status!=FALSE){
+  g_opt.flg_show_subject = GET_RC_BOOLEAN("show_subject");
+  if (g_opt.flg_show_subject!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.show_subject_btn), TRUE);
   }
-  status = g_key_file_get_boolean(g_opt.rcfile, GHOSTBIFF, "show_content", NULL);
-  if (status!=FALSE){
+
+  g_opt.flg_show_content = GET_RC_BOOLEAN("show_content");
+  if (g_opt.flg_show_content!=FALSE){
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_opt.show_content_btn), TRUE);
   }
   /* disable for message-view signal */
+#if 0
   gtk_widget_set_sensitive(GTK_WIDGET(g_opt.show_subject_btn), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(g_opt.show_content_btn), FALSE);
-    
+#endif    
 
   /* input sample text */
   GtkWidget *sample_frm = gtk_frame_new(_("Test sample"));
@@ -1028,6 +916,7 @@ static GtkWidget *create_config_about_page(GtkWidget *notebook, GKeyFile *pkey)
   GtkTextBuffer *tbuffer = gtk_text_buffer_new(NULL);
   gtk_text_buffer_set_text(tbuffer, _(g_copyright), strlen(g_copyright));
   GtkWidget *tview = gtk_text_view_new_with_buffer(tbuffer);
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(tview), FALSE);
   gtk_container_add(GTK_CONTAINER(scrolled), tview);
     
   gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 6);
