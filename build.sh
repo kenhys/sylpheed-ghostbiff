@@ -21,6 +21,18 @@ fi
 
 function compile ()
 {
+    if [ ! -f "private_build.h" ]; then
+        echo "1" > .compile
+        echo "#define PRIVATE_BUILD 1" > private_build.h
+    else
+        ret=`cat .compile | gawk '{print $i+1}'`
+        echo $ret | tee .compile
+        echo "#define PRIVATE_BUILD \"build $ret\\0\"" > private_build.h
+    fi
+    com="windres -i version.rc -o version.o"
+    echo $com
+    eval $com
+
     com="gcc -Wall -c $DEF $INC $NAME.c"
     echo $com
     eval $com
