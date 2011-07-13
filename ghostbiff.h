@@ -5,6 +5,7 @@
 #include "plugin.h"
 #include "procmsg.h"
 #include "procmime.h"
+#include "account.h"
 #include "utils.h"
 #include "unmime.h"
 #include "alertpanel.h"

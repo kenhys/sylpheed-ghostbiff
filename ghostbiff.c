@@ -195,10 +195,10 @@ void plugin_load(void)
 
   }else{
     if (g_aquestalk2da == NULL){
-      debug_print("LoadLibrary AquesTalk2Da.dll failed\n");
+      debug_print("[PLUGIN] LoadLibrary AquesTalk2Da.dll failed\n");
     }
     if (g_aqkanji2koe == NULL){
-      debug_print("LoadLibrary AqKanji2Koe.dll failed\n");
+      debug_print("[PLUGIN] LoadLibrary AqKanji2Koe.dll failed\n");
     }
     g_aquestalk_thread=FALSE;
   }
@@ -216,20 +216,20 @@ void plugin_load(void)
 
 void plugin_unload(void)
 {
-  g_print("[DEBUG] plugin_unload called.\n");
+  g_print("[PLUGIN] plugin_unload called.\n");
   g_free(g_opt.rcpath);
 
-  g_print("[DEBUG] g_aquestalk_thread to FALSE\n");
+  g_print("[PLUGIN] g_aquestalk_thread to FALSE\n");
   g_aquestalk_thread=FALSE;
 
 #if 0
   if (g_thread!=NULL){
-    g_print("[DEBUG] waiting g_thread_join\n");
+    g_print("[PLUGIN] waiting g_thread_join\n");
     g_thread_join(g_thread);
   }
 #endif
   
-  g_print("[DEBUG] plugin_unload done.\n");
+  g_print("[PLUGIN] plugin_unload done.\n");
 }
 
 SylPluginInfo *plugin_info(void)
@@ -671,14 +671,16 @@ static void exec_messageview_show_cb(GObject *obj, gpointer msgview,
 
   /*MsgInfo* msg = procmsg_msginfo_copy(msginfo);*/
 
-  debug_print("mutex_lock\n");
-  g_mutex_lock(g_mutex);
-  debug_print("append msginfo to list\n");
-  g_mails = g_list_append(g_mails, msginfo);
-  debug_print("after append stack:%d\n", g_list_length(g_mails));
-  g_cond_signal(g_cond);
-  g_mutex_unlock(g_mutex);
-  debug_print("mutex_unlock\n");
+  if (g_mutex_trylock(g_mutex) != FALSE){
+    debug_print("append msginfo to list\n");
+    g_mails = g_list_append(g_mails, msginfo);
+    debug_print("after append stack:%d\n", g_list_length(g_mails));
+    g_cond_signal(g_cond);
+    g_mutex_unlock(g_mutex);
+    debug_print("mutex_unlock\n");
+  } else {
+    debug_print("[PLUGIN] mutex_trylock failed. %s\n", msginfo->subject);
+  }
   /*read_mail_by_aquestalk(msginfo);*/
     
 }
@@ -1077,20 +1079,19 @@ static void phont_btn_clicked(GtkButton *button, gpointer data)
 
 gpointer aquestalk_thread_func(gpointer data)
 {
-  g_print("[DEBUG] aquestalk_thread_func called.\n");
-  g_print("[DEBUG] g_aquestalk_thread %d\n", g_aquestalk_thread);
+  g_print("[PLUGIN] aquestalk_thread_func called.\n");
+  g_print("[PLUGIN] g_aquestalk_thread %d\n", g_aquestalk_thread);
   GTimeVal tval;
   gboolean bloop = TRUE;
   while(bloop){
 
     g_mutex_lock(g_mutex);
-    g_print("[DEBUG] check bloop.\n");
+    g_print("[PLUGIN] check bloop.\n");
     if (g_aquestalk_thread!=TRUE){
-      g_print("[DEBUG] bloop to FALSE\n");
+      g_print("[PLUGIN] bloop to FALSE\n");
       bloop = FALSE;
     }
-    g_print("[DEBUG] check bloop end.\n");
-    g_mutex_unlock(g_mutex);
+    g_print("[PLUGIN] check bloop end.\n");
 
     g_get_current_time(&tval);
     /* per 10 second, */
@@ -1099,34 +1100,35 @@ gpointer aquestalk_thread_func(gpointer data)
     if (ret != FALSE){
       /* signal */
       g_print("signal in thread\n");
+
     } else {
       /* timeout */
       /*debug_print("timeout in thread\n");*/
     }
     if (proc_aqda_isplay!=NULL){
       if (proc_aqda_isplay(g_aqtkda) != 0){
-        g_print("[DEBUG] now playing\n");
+        g_print("[PLUGIN] now playing\n");
       } else {
         /* now play */
-        g_mutex_lock(g_mutex);
         if (g_mails!=NULL && g_list_length(g_mails) > 0){
-          g_print("[DEBUG] ready to play\n");
+          g_print("[PLUGIN] ready to play\n");
           MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
           /*debug_print("nothing to play %s\n", msginfo->file_path);*/
-          g_print("[DEBUG] thread before play 0 stack:%d\n", g_list_length(g_mails));
+          g_print("[PLUGIN] thread before play 0 stack:%d\n", g_list_length(g_mails));
           read_mail_by_aquestalk(msginfo);
           g_mails=g_list_remove(g_mails, msginfo);
-          g_print("[DEBUG] thread after play 0 stack:%d\n", g_list_length(g_mails));
+          g_print("[PLUGIN] thread after play 0 stack:%d\n", g_list_length(g_mails));
         }else {
-          g_print("[DEBUG] nothing to play\n");
+          g_print("[PLUGIN] nothing to play\n");
         }
-        g_mutex_unlock(g_mutex);
       }
     } else{
-      g_print("[DEBUG] missing AquesTalk2Da_IsPlay in thread\n");
+      g_print("[PLUGIN] missing AquesTalk2Da_IsPlay in thread\n");
     }
+    g_mutex_unlock(g_mutex);
+    
   }
-  g_print("[DEBUG] aquestalk_thread_func end.\n");
+  g_print("[PLUGIN] aquestalk_thread_func end.\n");
   return NULL;
 }
 
@@ -1159,19 +1161,20 @@ static void menu_selected_cb(void)
 	g_print("test: number of selected summary message: %d\n",
             g_slist_length(mlist));
 
-    g_mutex_lock(g_mutex);
-    int nindex=0;
-    for (nindex=0; nindex < g_slist_length(mlist); nindex++){
-      MsgInfo *msginfo = g_slist_nth_data(mlist, nindex);
-      g_print("menu from: %s\n", msginfo->from);
-      g_print("menu to: %s\n", msginfo->to);
-      g_print("menu subject: %s\n", msginfo->subject);
-      g_print("menu date: %s\n", msginfo->date);
-      g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
+    if (g_mutex_trylock(g_mutex)!=FALSE){
+      int nindex=0;
+      for (nindex=0; nindex < g_slist_length(mlist); nindex++){
+        MsgInfo *msginfo = g_slist_nth_data(mlist, nindex);
+        g_print("menu from: %s\n", msginfo->from);
+        g_print("menu to: %s\n", msginfo->to);
+        g_print("menu subject: %s\n", msginfo->subject);
+        g_print("menu date: %s\n", msginfo->date);
+        g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
+      }
+      g_cond_signal(g_cond);
+      g_mutex_unlock(g_mutex);
+      g_slist_free(mlist);
     }
-    g_cond_signal(g_cond);
-    g_mutex_unlock(g_mutex);
-	g_slist_free(mlist);
 }
 
 static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
@@ -1241,20 +1244,21 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
 
     debug_print("mutex_lock\n");
 
-    g_mutex_lock(g_mutex);
-    debug_print("append msginfo to list\n");
-    if (msginfo->file_path){
-      debug_print("msginfo file_path:%s\n", msginfo->file_path);
+    if (g_mutex_trylock(g_mutex)!= FALSE){
+      debug_print("append msginfo to list\n");
+      if (msginfo->file_path){
+        debug_print("msginfo file_path:%s\n", msginfo->file_path);
+      }
+      debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
+      debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
+
+      g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
+      debug_print("after append stack:%d\n", g_list_length(g_mails));
+      g_cond_signal(g_cond);
+
+      g_mutex_unlock(g_mutex);
+      debug_print("mutex_unlock\n");
     }
-    debug_print("msginfo msgnum:%d\n", msginfo->msgnum);
-    debug_print("msginfo subject:%s\n", unmime_header(msginfo->subject));
-
-    g_mails = g_list_append(g_mails, procmsg_msginfo_copy(msginfo));
-    debug_print("after append stack:%d\n", g_list_length(g_mails));
-    g_cond_signal(g_cond);
-
-    g_mutex_unlock(g_mutex);
-    debug_print("mutex_unlock\n");
     /*read_mail_by_aquestalk(msginfo);*/
   }
 }
