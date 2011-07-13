@@ -1,4 +1,4 @@
-#define	VS_VERSION_INFO	1
+#include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 0,2,0,0
