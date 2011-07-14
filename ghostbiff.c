@@ -633,9 +633,9 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     proc_aqkanji_convert(g_aqkanji, sjis, buf, 1024);
   }
 #ifdef DEBUG
-  g_print("text:%s\n", text);
-  g_print("sjis:%s\n", sjis);
-  g_print("koe:%s\n", buf);
+  log_print("text:%s\n", text);
+  log_print("sjis:%s\n", sjis);
+  log_print("koe:%s\n", buf);
 #endif
   
   const gchar *phont_type = g_key_file_get_string(g_opt.rcfile, GHOSTBIFF, "phont", NULL);
@@ -655,7 +655,7 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
   }
   int nResult = proc_aqda_play(g_aqtkda, buf, 100, NULL/*g_phont*/, NULL, 0, 0);
   if (nResult != 0){
-    g_print("AquesTalk2Da_Play:%d\n", nResult);
+      g_print("AquesTalk2Da_Play:%d\n", nResult);
   }
 
   if (g_opt.flg_new_content || g_opt.flg_show_content){
@@ -671,16 +671,17 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     fgetpos(fp,&fsize);
     fseek(fp, fbak, SEEK_SET);
     char *bbuf = (char*)malloc(fsize*2);
+    memset(bbuf, fsize*2, 0);
     if (proc_aqkanji_convert){
       proc_aqkanji_convert(g_aqkanji, body, bbuf, 1024);
     }
 #ifdef DEBUG
-    g_print("body encoding:%s\n", enc);
-    g_print("body:%s\n", body);
-    g_print("body bbuf:%s\n", bbuf);
-    g_print("body buf:%s\n", buf);
+    log_print("body encoding:%s\n", enc);
+    log_print("body:%s\n", body);
+    log_print("body bbuf:%s\n", bbuf);
+    log_print("body buf:%s\n", buf);
 #endif
-    nResult = proc_aqda_play(g_aqtkda, body, 100, NULL/*g_phont*/, NULL, 0, 0);
+    nResult = proc_aqda_play(g_aqtkda, bbuf, 100, NULL/*g_phont*/, NULL, 0, 0);
     if (nResult != 0){
       g_print("AquesTalk2Da_Play:%d\n", nResult);
     }
