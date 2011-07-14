@@ -74,7 +74,7 @@ else
                 ;;
             pot)
                 mkdir -p po
-                com="xgettext $NAME.c -k_ -kN_ -o po/$NAME.pot"
+                com="xgettext $NAME.h $NAME.c -k_ -kN_ -o po/$NAME.pot"
                 echo $com
                 eval $com
                 shift

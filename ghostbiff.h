@@ -37,8 +37,8 @@
 #define GHOSTBIFF "ghostbiff"
 #define GHOSTBIFFRC "ghostbiffrc"
 
-#define PLUGIN_NAME N_("Ghostbiff - mail biff plug-in")
-#define PLUGIN_DESC N_("Simple biff plug-in for Sylpheed")
+#define PLUGIN_NAME N_("Ghostbiff - DirectSSTP biff plug-in")
+#define PLUGIN_DESC N_("DirectSSTP biff plug-in for Sylpheed")
 
 typedef struct _GhostOption GhostOption;
 

@@ -211,10 +211,14 @@ void plugin_load(void)
   /* initialize .phont map. */
   g_phont_map = g_hash_table_new(g_str_hash, g_str_equal);
 
+  info.name = g_strdup(_(PLUGIN_NAME));
+  info.description = g_strdup(_(PLUGIN_DESC));
+
+#if 0
   syl_plugin_add_factory_item("<SummaryView>", "/---", NULL, NULL);
   syl_plugin_add_factory_item("<SummaryView>", "/Text To Speech [ghostbiff]",
                               menu_selected_cb, NULL);
-
+#endif
 }
 
 void plugin_unload(void)
@@ -842,7 +846,7 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   
   /* talk setting when you received new mail.
      read subject,body check button */
-  GtkWidget *new_frm = gtk_frame_new(_("Read what when you receive mail"));
+  GtkWidget *new_frm = gtk_frame_new(_("Read what text when you receive mail"));
   GtkWidget *new_hbox = gtk_hbox_new(FALSE, 6);
   g_opt.new_subject_btn = gtk_check_button_new_with_label(_("subject"));
   g_opt.new_content_btn = gtk_check_button_new_with_label(_("content"));
@@ -870,7 +874,7 @@ static GtkWidget *create_config_aques_page(GtkWidget *notebook, GKeyFile *pkey)
   
   /* talk setting when you preview each mail.
      subject,body check button */
-  GtkWidget *preview_frm = gtk_frame_new(_("Read what when you preview mail"));
+  GtkWidget *preview_frm = gtk_frame_new(_("Read what text when you preview mail"));
   GtkWidget *pv_hbox = gtk_hbox_new(FALSE, 6);
   g_opt.show_subject_btn = gtk_check_button_new_with_label(_("subject"));
   g_opt.show_content_btn = gtk_check_button_new_with_label(_("content"));
