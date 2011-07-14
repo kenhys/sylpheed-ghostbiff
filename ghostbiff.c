@@ -662,9 +662,19 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     FILE* infile = fopen(msgpath, "r");
     FILE* fp = procmime_get_text_content(mimeinfo, infile, "Shift_JIS");
     gchar *body = file_read_stream_to_str(fp);
+    fpos_t fbak = fseek(fp, 0, SEEK_END);
+    fpos_t fsize = 0;
+    fgetpos(fp,&fsize);
+    fseek(fp, fbak, SEEK_SET);
+    char *bbuf = (char*)malloc(fsize*2);
+    if (proc_aqkanji_convert){
+      proc_aqkanji_convert(g_aqkanji, body, bbuf, 1024);
+    }
 #ifdef DEBUG
     g_print("body encoding:%s\n", enc);
     g_print("body:%s\n", body);
+    g_print("body bbuf:%s\n", bbuf);
+    g_print("body buf:%s\n", buf);
 #endif
     nResult = proc_aqda_play(g_aqtkda, body, 100, NULL/*g_phont*/, NULL, 0, 0);
     if (nResult != 0){
