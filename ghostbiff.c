@@ -67,7 +67,6 @@ static gchar *g_phont = NULL;
 /* hashtable for .phont path(key) and phont data */
 static GHashTable *g_phont_map = NULL;
 
-static MsgInfo *g_msginfo = NULL;
 static GThread *g_thread = NULL;
 
 
@@ -654,6 +653,27 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
   if (nResult != 0){
     g_print("AquesTalk2Da_Play:%d\n", nResult);
   }
+
+  if (g_opt.flg_new_content || g_opt.flg_show_content){
+    gchar *msgpath = procmsg_get_message_file_path(msginfo);
+    EncodingType etype = procmime_get_encoding_for_text_file(msgpath);
+    gchar *enc = procmime_get_encoding_str(etype);
+    MimeInfo *mimeinfo = procmime_scan_message(msginfo);
+    FILE* infile = fopen(msgpath, "r");
+    FILE* fp = procmime_get_text_content(mimeinfo, infile, "Shift_JIS");
+    gchar *body = file_read_stream_to_str(fp);
+#ifdef DEBUG
+    g_print("body encoding:%s\n", enc);
+    g_print("body:%s\n", body);
+#endif
+    nResult = proc_aqda_play(g_aqtkda, body, 100, NULL/*g_phont*/, NULL, 0, 0);
+    if (nResult != 0){
+      g_print("AquesTalk2Da_Play:%d\n", nResult);
+    }
+    fclose(infile);
+    fclose(fp);
+  }
+
 }
 
 static void exec_messageview_show_cb(GObject *obj, gpointer msgview,
@@ -663,13 +683,9 @@ static void exec_messageview_show_cb(GObject *obj, gpointer msgview,
   g_print(msginfo->subject);
   g_print(msginfo->from);
   g_print(msginfo->to);
-  g_print("test: %p: messageview_show (%p), all_headers: %d: %s\n",
+  g_print("[PLUGIN] obj %p msgview (%p), all_headers: %d: %s\n",
           obj, msgview, all_headers,
           msginfo && msginfo->subject ? msginfo->subject : "");
-
-  GtkWidget* text = ((MessageView*)msgview)->textview->text;
-
-  /*MsgInfo* msg = procmsg_msginfo_copy(msginfo);*/
 
   if (g_mutex_trylock(g_mutex) != FALSE){
     debug_print("append msginfo to list\n");
@@ -1086,12 +1102,16 @@ gpointer aquestalk_thread_func(gpointer data)
   while(bloop){
 
     g_mutex_lock(g_mutex);
+#if DEBUG
     g_print("[PLUGIN] check bloop.\n");
+#endif
     if (g_aquestalk_thread!=TRUE){
       g_print("[PLUGIN] bloop to FALSE\n");
       bloop = FALSE;
     }
+#if DEBUG
     g_print("[PLUGIN] check bloop end.\n");
+#endif
 
     g_get_current_time(&tval);
     /* per 10 second, */
@@ -1109,17 +1129,22 @@ gpointer aquestalk_thread_func(gpointer data)
       if (proc_aqda_isplay(g_aqtkda) != 0){
         g_print("[PLUGIN] now playing\n");
       } else {
-        /* now play */
+        /* play msginfo */
         if (g_mails!=NULL && g_list_length(g_mails) > 0){
           g_print("[PLUGIN] ready to play\n");
           MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
           /*debug_print("nothing to play %s\n", msginfo->file_path);*/
           g_print("[PLUGIN] thread before play 0 stack:%d\n", g_list_length(g_mails));
+          g_print("[PLUGIN] message_file:%s\n", procmsg_get_message_file(msginfo));
+          g_print("[PLUGIN] message_file_path:%s\n", procmsg_get_message_file_path(msginfo));
+          g_print("[PLUGIN] thread before play 0 stack:%d\n", g_list_length(g_mails));
           read_mail_by_aquestalk(msginfo);
           g_mails=g_list_remove(g_mails, msginfo);
           g_print("[PLUGIN] thread after play 0 stack:%d\n", g_list_length(g_mails));
         }else {
+#if DEBUG
           g_print("[PLUGIN] nothing to play\n");
+#endif
         }
       }
     } else{
@@ -1236,7 +1261,8 @@ static void debug_play_btn_clicked(GtkButton *button, gpointer data)
     
   /* pick up mail by random */
   GRand *grnd = g_rand_new();
-  for (gint ncount = 0; ncount < nnum; ncount++){
+  gint ncount = 0;
+  for (ncount = 0; ncount < nnum; ncount++){
     gint32 nindex = g_rand_int_range(grnd, 0, nlstlen-1);
     MsgInfo *msginfo = g_slist_nth_data(msglist, nindex);
 
