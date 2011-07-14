@@ -144,6 +144,10 @@ void plugin_load(void)
          _("Ghostbiff is enabled. Click the icon to disable plugin."),
          NULL);
     }
+    g_opt.flg_new_subject = GET_RC_BOOLEAN("new_subject");
+    g_opt.flg_new_content = GET_RC_BOOLEAN("new_content");
+    g_opt.flg_show_subject = GET_RC_BOOLEAN("show_subject");
+    g_opt.flg_show_content = GET_RC_BOOLEAN("show_content");
   }
 
   /* test dll load */
@@ -682,6 +686,9 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     }
     fclose(infile);
     fclose(fp);
+    if (bbuf!=NULL){
+        free(bbuf);
+    }
   }
 
 }
