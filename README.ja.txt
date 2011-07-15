@@ -21,7 +21,7 @@ ghostbiff.dllをSylpheedのプラグインディレクトリへとコピーします。
 
 pluginsディレクトリへ配置します。
 
-2) Sylpheedをインスーラセットアップした場合
+2) Sylpheedをインスーラによりセットアップした場合
 
 %APPDATA%/Sylpheed/plugins以下に配置します。
 Windows XPの場合以下の場所にdllをコピーして下さい。
@@ -45,4 +45,6 @@ SSPが起動していない場合、ghostbiffによる新着通知は行われません。
 
 本プラグインには評価実験用としてアクエスト社のAquesTalk2およびAqKanji2Koe
 (いずれも評価版)に対応しています。
+
+その場合、sylpheed.exeと同じところにAqKanji2Koe.dllおよびAquesTalk2Da.dllが必要となります。
 

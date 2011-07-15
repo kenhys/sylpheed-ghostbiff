@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-07-14 20:40+0900\n"
+"POT-Creation-Date: 2011-07-16 00:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -73,70 +73,70 @@ msgstr ""
 msgid "Ghostbiff is disabled. Click the icon to enable plugin."
 msgstr ""
 
-#: ghostbiff.c:737
+#: ghostbiff.c:743
 msgid "Enable plugin on startup."
 msgstr ""
 
-#: ghostbiff.c:741
+#: ghostbiff.c:747
 msgid "Enable AquesTalk2,AqKanji2Koe.[Experimental]"
 msgstr ""
 
-#: ghostbiff.c:767
+#: ghostbiff.c:773
 msgid "General"
 msgstr ""
 
-#: ghostbiff.c:784
+#: ghostbiff.c:790
 msgid "AquesTalk2 aq_dic directory"
 msgstr ""
 
-#: ghostbiff.c:791
+#: ghostbiff.c:797
 msgid "Select aq_dic directory"
 msgstr ""
 
-#: ghostbiff.c:808
+#: ghostbiff.c:814
 msgid "AquesTalk2 phont directory"
 msgstr ""
 
-#: ghostbiff.c:816
+#: ghostbiff.c:822
 msgid "Select phont directory"
 msgstr ""
 
-#: ghostbiff.c:832
+#: ghostbiff.c:838
 msgid "Phont type:"
 msgstr ""
 
-#: ghostbiff.c:849
+#: ghostbiff.c:855
 msgid "Read what text when you receive mail"
 msgstr ""
 
-#: ghostbiff.c:851 ghostbiff.c:879
+#: ghostbiff.c:857 ghostbiff.c:885
 msgid "subject"
 msgstr ""
 
-#: ghostbiff.c:852 ghostbiff.c:880
+#: ghostbiff.c:858 ghostbiff.c:886
 msgid "content"
 msgstr ""
 
-#: ghostbiff.c:877
+#: ghostbiff.c:883
 msgid "Read what text when you preview mail"
 msgstr ""
 
-#: ghostbiff.c:905
+#: ghostbiff.c:911
 msgid "Test sample"
 msgstr ""
 
-#: ghostbiff.c:910
+#: ghostbiff.c:916
 msgid "sample text"
 msgstr ""
 
-#: ghostbiff.c:912
+#: ghostbiff.c:918
 msgid "Play"
 msgstr ""
 
-#: ghostbiff.c:929
+#: ghostbiff.c:935
 msgid "AquesTalk"
 msgstr ""
 
-#: ghostbiff.c:965
+#: ghostbiff.c:971
 msgid "About"
 msgstr ""

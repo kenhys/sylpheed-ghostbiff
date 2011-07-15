@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-07-14 20:40+0900\n"
+"POT-Creation-Date: 2011-07-16 00:51+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: HAYASHI Kentaro <kenhys@gmail.com>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -48,9 +48,9 @@ msgstr ""
 "Licensed under a Creative Commons Attribution 2.5 License.\n"
 "http://www.famfamfam.com/lab/icons/silk/\n"
 "\n"
-"もしAquesTalk2 AqKanji2Koeの正規ライセンスがあれば"
-"AquesTalk2およびAqKanji2KoeをTTSエンジンとして使うことができます。\n"
-"ただしghostbiffは評価版でのみ確認しているので、\n"
+"もしAquesTalk2 AqKanji2Koeの正規ライセンスがあればAquesTalk2およびAqKanji2Koe"
+"をTTSエンジンとして使うことができます。\n"
+"ただし評価版でのみ確認しているので、"
 "正式版では動作しないかも知れません。"
 
 #: ghostbiff.c:88 ghostbiff.c:89
@@ -89,70 +89,70 @@ msgstr ""
 "Ghostbiffは無効化されました。プラグインを有効にするにはアイコンをクリックして"
 "下さい"
 
-#: ghostbiff.c:737
+#: ghostbiff.c:743
 msgid "Enable plugin on startup."
 msgstr "起動時にプラグインを有効化"
 
-#: ghostbiff.c:741
+#: ghostbiff.c:747
 msgid "Enable AquesTalk2,AqKanji2Koe.[Experimental]"
 msgstr "AquesTalk2,AqKanji2Koeを有効にする"
 
-#: ghostbiff.c:767
+#: ghostbiff.c:773
 msgid "General"
 msgstr "全般"
 
-#: ghostbiff.c:784
+#: ghostbiff.c:790
 msgid "AquesTalk2 aq_dic directory"
 msgstr "AquesTalk2 aq_dic ディレクトリ指定"
 
-#: ghostbiff.c:791
+#: ghostbiff.c:797
 msgid "Select aq_dic directory"
 msgstr "aq_dicディレクトリを指定して下さい"
 
-#: ghostbiff.c:808
+#: ghostbiff.c:814
 msgid "AquesTalk2 phont directory"
 msgstr "AquesTalk2 phont ディレクトリ指定"
 
-#: ghostbiff.c:816
+#: ghostbiff.c:822
 msgid "Select phont directory"
 msgstr "phontディレクトリを指定して下さい"
 
-#: ghostbiff.c:832
+#: ghostbiff.c:838
 msgid "Phont type:"
 msgstr "音声:"
 
-#: ghostbiff.c:849
+#: ghostbiff.c:855
 msgid "Read what text when you receive mail"
 msgstr "メールを受信した際に読み上げる"
 
-#: ghostbiff.c:851 ghostbiff.c:879
+#: ghostbiff.c:857 ghostbiff.c:885
 msgid "subject"
 msgstr "件名"
 
-#: ghostbiff.c:852 ghostbiff.c:880
+#: ghostbiff.c:858 ghostbiff.c:886
 msgid "content"
 msgstr "本文"
 
-#: ghostbiff.c:877
+#: ghostbiff.c:883
 msgid "Read what text when you preview mail"
 msgstr "メールを表示した際に読み上げる"
 
-#: ghostbiff.c:905
+#: ghostbiff.c:911
 msgid "Test sample"
 msgstr "読み上げサンプル"
 
-#: ghostbiff.c:910
+#: ghostbiff.c:916
 msgid "sample text"
 msgstr "本日は晴天なり"
 
-#: ghostbiff.c:912
+#: ghostbiff.c:918
 msgid "Play"
 msgstr "再生"
 
-#: ghostbiff.c:929
+#: ghostbiff.c:935
 msgid "AquesTalk"
 msgstr ""
 
-#: ghostbiff.c:965
+#: ghostbiff.c:971
 msgid "About"
 msgstr "情報"

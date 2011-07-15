@@ -1,3 +1,8 @@
+2011-07-16 HAYASHI Kentaro <kenhys@gmail.com>
+	* version 0.3.0
+	  support reading subject or body.
+	  add version resource.
+	
 2011-05-05 HAYASHI Kentaro <kenhys@gmail.com>
 	
 	* vesion 0.2.0

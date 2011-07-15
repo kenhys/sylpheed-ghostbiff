@@ -36,7 +36,7 @@
 
 static SylPluginInfo info = {
   N_(PLUGIN_NAME),
-  "0.2.0",
+  "0.3.0",
   "HAYASHI Kentaro",
   N_(PLUGIN_DESC)
 };
@@ -336,6 +336,7 @@ static void exec_ghostbiff_menu_cb(void)
   gtk_window_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
   gtk_window_set_modal(GTK_WINDOW(window), TRUE);
   gtk_window_set_policy(GTK_WINDOW(window), FALSE, TRUE, FALSE);
+  gtk_window_set_default_size(GTK_WINDOW(window), 300, 300);
   gtk_widget_realize(window);
 
   vbox = gtk_vbox_new(FALSE, 6);
@@ -490,14 +491,16 @@ static void exec_ghostbiff_cb(GObject *obj, FolderItem *item, const gchar *file,
 
   MsgInfo *msginfo = folder_item_get_msginfo(item, num);
   
-  debug_print("mutex_lock\n");
-  g_mutex_lock(g_mutex);
-  debug_print("append msginfo to list\n");
-  g_mails = g_list_append(g_mails, msginfo);
-  debug_print("after append stack:%d\n", g_list_length(g_mails));
-  g_cond_signal(g_cond);
-  g_mutex_unlock(g_mutex);
-  debug_print("mutex_unlock\n");
+  if (g_opt.flg_new_subject || g_opt.flg_new_content){
+    debug_print("mutex_lock\n");
+    g_mutex_lock(g_mutex);
+    debug_print("append msginfo to list\n");
+    g_mails = g_list_append(g_mails, msginfo);
+    debug_print("after append stack:%d\n", g_list_length(g_mails));
+    g_cond_signal(g_cond);
+    g_mutex_unlock(g_mutex);
+    debug_print("mutex_unlock\n");
+  }
 }
 
 static void send_directsstp(MsgInfo *msginfo)
@@ -708,16 +711,20 @@ static void exec_messageview_show_cb(GObject *obj, gpointer msgview,
   g_print("[PLUGIN] obj %p msgview (%p), all_headers: %d: %s\n",
           obj, msgview, all_headers,
           msginfo && msginfo->subject ? msginfo->subject : "");
-
-  if (g_mutex_trylock(g_mutex) != FALSE){
-    debug_print("append msginfo to list\n");
-    g_mails = g_list_append(g_mails, msginfo);
-    debug_print("after append stack:%d\n", g_list_length(g_mails));
-    g_cond_signal(g_cond);
-    g_mutex_unlock(g_mutex);
-    debug_print("mutex_unlock\n");
-  } else {
-    debug_print("[PLUGIN] mutex_trylock failed. %s\n", msginfo->subject);
+  if (g_enable!=TRUE){
+    return;
+  }
+  if (g_opt.flg_show_subject || g_opt.flg_show_content){
+    if (g_mutex_trylock(g_mutex) != FALSE){
+      debug_print("append msginfo to list\n");
+      g_mails = g_list_append(g_mails, msginfo);
+      debug_print("after append stack:%d\n", g_list_length(g_mails));
+      g_cond_signal(g_cond);
+      g_mutex_unlock(g_mutex);
+      debug_print("mutex_unlock\n");
+    } else {
+      debug_print("[PLUGIN] mutex_trylock failed. %s\n", msginfo->subject);
+    }
   }
   /*read_mail_by_aquestalk(msginfo);*/
     
@@ -1238,6 +1245,7 @@ static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
   g_print("test: %p: msg: %s\n", obj,
           msginfo && msginfo->subject ? msginfo->subject : "");
 
+#if 0
   separator = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
   gtk_widget_show(separator);
@@ -1246,6 +1254,7 @@ static void textview_menu_popup_cb(GObject *obj, GtkMenu *menu,
   g_signal_connect(menuitem, "activate", G_CALLBACK(activate_menu_cb), NULL);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem);
   gtk_widget_show(menuitem);
+#endif
 }
 
 #ifdef DEBUG
