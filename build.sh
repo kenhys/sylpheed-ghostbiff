@@ -119,6 +119,7 @@ else
                     #zip -r sylpheed-$NAME-$r.zip $NAME.c
                     zip -r sylpheed-$NAME-$r.zip po/$NAME.mo
                     zip -r sylpheed-$NAME-$r.zip *.xpm
+                    sha1sum sylpheed-$NAME-$r.zip > sylpheed-$NAME-$r.zip.sha1sum
                 fi
                 ;;
             -c|-compile)
