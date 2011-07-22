@@ -69,7 +69,7 @@ else
     while [  $# -ne 0 ]; do
         case "$1" in
             -debug|--debug)
-                DEF=" $DEF -DDEBUG"
+                DEF=" -ggdb $DEF -DDEBUG"
                 shift
                 ;;
             pot)

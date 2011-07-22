@@ -667,11 +667,21 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
 
   if (g_opt.flg_new_content || g_opt.flg_show_content){
     gchar *msgpath = procmsg_get_message_file_path(msginfo);
+    g_return_if_fail(msgpath!=NULL);
+
     EncodingType etype = procmime_get_encoding_for_text_file(msgpath);
     gchar *enc = procmime_get_encoding_str(etype);
     MimeInfo *mimeinfo = procmime_scan_message(msginfo);
+    g_return_if_fail(mimeinfo != NULL);
+
+    if (mimeinfo->mime_type != MIME_TEXT && mimeinfo->mime_type != MIME_TEXT_HTML){
+      g_print("[PLUGIN] not text nor html\n");
+      return;
+    }
     FILE* infile = fopen(msgpath, "r");
     FILE* fp = procmime_get_text_content(mimeinfo, infile, "Shift_JIS");
+    g_return_if_fail(fp != NULL);
+
     gchar *body = file_read_stream_to_str(fp);
     fpos_t fbak = fseek(fp, 0, SEEK_END);
     fpos_t fsize = 0;
@@ -680,7 +690,7 @@ static void read_mail_by_aquestalk(MsgInfo *msginfo)
     char *bbuf = (char*)malloc(fsize*2);
     memset(bbuf, fsize*2, 0);
     if (proc_aqkanji_convert){
-      proc_aqkanji_convert(g_aqkanji, body, bbuf, 1024);
+      proc_aqkanji_convert(g_aqkanji, body, bbuf, fsize*2);
     }
 #ifdef DEBUG
     log_print("body encoding:%s\n", enc);
@@ -1156,7 +1166,9 @@ gpointer aquestalk_thread_func(gpointer data)
     }
     if (proc_aqda_isplay!=NULL){
       if (proc_aqda_isplay(g_aqtkda) != 0){
+#if DEBUG
         g_print("[PLUGIN] now playing\n");
+#endif
       } else {
         /* play msginfo */
         if (g_mails!=NULL && g_list_length(g_mails) > 0){
@@ -1164,8 +1176,14 @@ gpointer aquestalk_thread_func(gpointer data)
           MsgInfo *msginfo = g_list_nth_data(g_mails, 0);
           /*debug_print("nothing to play %s\n", msginfo->file_path);*/
           g_print("[PLUGIN] thread before play 0 stack:%d\n", g_list_length(g_mails));
-          g_print("[PLUGIN] message_file:%s\n", procmsg_get_message_file(msginfo));
-          g_print("[PLUGIN] message_file_path:%s\n", procmsg_get_message_file_path(msginfo));
+          gchar *p = procmsg_get_message_file(msginfo);
+          if (p != NULL) {
+              g_print("[PLUGIN] message_file:%s\n", p);
+          }
+          p = procmsg_get_message_file_path(msginfo);
+          if  (p != NULL) {
+              g_print("[PLUGIN] message_file_path:%s\n", p);
+          }
           g_print("[PLUGIN] thread before play 0 stack:%d\n", g_list_length(g_mails));
           read_mail_by_aquestalk(msginfo);
           g_mails=g_list_remove(g_mails, msginfo);
