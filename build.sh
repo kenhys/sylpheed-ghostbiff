@@ -46,18 +46,12 @@ function compile ()
     if [ $? != 0 ]; then
         echo "done"
     else
-        DEST="/C/Users/$LOGNAME/AppData/Roaming/Sylpheed/plugins"
-        if [ -d "$DEST" ]; then
-            com="cp $TARGET $DEST/$NAME.dll"
+        if [ -d "$SYLPLUGINDIR" ]; then
+            com="cp $TARGET \"$SYLPLUGINDIR/$NAME.dll\""
             echo $com
             eval $com
         else
-            DEST="/C/Documents and Settings/$LOGNAME/Application Data/Sylpheed/plugins"
-            if [ -d "$DEST" ]; then
-                com="cp $TARGET \"$DEST/$NAME.dll\""
-                echo $com
-                eval $com
-            fi
+            :
         fi
     fi
 
@@ -89,9 +83,8 @@ else
                 com="msgfmt po/ja.po -o po/$NAME.mo"
                 echo $com
                 eval $com
-                DEST="/C/apps/Sylpheed/lib/locale/ja/LC_MESSAGES"
-                if [ -d "$DEST" ]; then
-                    com="cp po/$NAME.mo $DEST/$NAME.mo"
+                if [ -d "$SYLLOCALEDIR" ]; then
+                    com="cp po/$NAME.mo \"$SYLLOCALEDIR/$NAME.mo\""
                     echo $com
                     eval $com
                 fi
