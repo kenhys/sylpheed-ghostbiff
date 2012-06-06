@@ -12,8 +12,8 @@
 #include "foldersel.h"
 #include "prefs_common.h"
 #include "summaryview.h"
-#include "bell_add.xpm"
-#include "bell_delete.xpm"
+#include "res/bell_add.xpm"
+#include "res/bell_delete.xpm"
 
 #ifdef USE_AQUESTALK
 #ifdef __MINGW32__
